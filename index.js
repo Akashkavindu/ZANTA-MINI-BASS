@@ -12,16 +12,23 @@ const fs = require("fs");
 const P = require("pino");
 const express = require("express");
 const path = require("path");
+const mongoose = require("mongoose"); // [වෙනස 1]: MongoDB සඳහා mongoose එකතු කළා
 const config = require("./config");
 const { sms } = require("./lib/msg");
 const { getGroupAdmins } = require("./lib/functions");
-const { File } = require("megajs");
 const { commands, replyHandlers } = require("./command");
 
 const { lastMenuMessage } = require("./plugins/menu");
 const { lastSettingsMessage } = require("./plugins/settings"); 
 const { lastHelpMessage } = require("./plugins/help"); 
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
+
+// [වෙනස 2]: MongoDB Session Schema එක (අලුත් DB එකේ creds කියවන්න)
+const SessionSchema = new mongoose.Schema({
+    number: { type: String, required: true, unique: true },
+    creds: { type: Object, required: true }
+}, { collection: 'sessions' });
+const Session = mongoose.models.Session || mongoose.model("Session", SessionSchema);
 
 const decodeJid = (jid) => {
     if (!jid) return jid;
@@ -40,57 +47,53 @@ global.CURRENT_BOT_SETTINGS = {
 
 const app = express();
 const port = process.env.PORT || 8000;
-const credsPath = path.join(__dirname, "/auth_info_baileys/creds.json");
 const messagesStore = {};
 
-// --- 🗑️ Bad Words List ---
 const customBadWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප"];
 
 process.on('uncaughtException', (err) => console.error('⚠️ Exception:', err));
 process.on('unhandledRejection', (reason) => console.error('⚠️ Rejection:', reason));
 
-async function ensureSessionFile() {
-    if (!fs.existsSync(credsPath)) {
-        if (!config.SESSION_ID) {
-            console.error("❌ SESSION_ID missing.");
-            process.exit(1);
-        }
-        console.log("🔄 Downloading session from MEGA...");
-        const filer = File.fromURL(`https://mega.nz/file/${config.SESSION_ID}`);
-        filer.download((err, data) => {
-            if (err) {
-                console.error("❌ Download failed:", err);
-                process.exit(1);
-            }
-            fs.mkdirSync(path.join(__dirname, "/auth_info_baileys/"), { recursive: true });
-            fs.writeFileSync(credsPath, data);
-            console.log("✅ Session saved. Restarting...");
-            setTimeout(() => connectToWA(), 2000);
-        });
-    } else {
-        setTimeout(() => connectToWA(), 1000);
+// [වෙනස 3]: මුලින්ම පද්ධතිය පණගන්වන Function එක (MEGA වෙනුවට MongoDB පාවිච්චි කරයි)
+async function startSystem() {
+    await connectDB(); // Bot Settings DB එක
+    global.CURRENT_BOT_SETTINGS = await getBotSettings();
+
+    // ඩේටාබේස් එකේ ඉන්න හැම සෙෂන් එකක්ම ගන්නවා
+    const allSessions = await Session.find({});
+    console.log(`🚀 Found ${allSessions.length} sessions. Initializing...`);
+
+    if (allSessions.length === 0) {
+        console.error("❌ No sessions found in MongoDB 'sessions' collection.");
+        return;
+    }
+
+    // හැම සෙෂන් එකකටම වෙන වෙනම කනෙක්ට් වෙනවා
+    for (let sessionData of allSessions) {
+        await connectToWA(sessionData);
     }
 }
 
-async function connectToWA() {
-    await connectDB();
-    global.CURRENT_BOT_SETTINGS = await getBotSettings();
+async function connectToWA(sessionData) {
+    const userNumber = sessionData.number;
+    // [වෙනස 4]: එක් එක් නම්බර් එකට වෙනම auth folder එකක් සාදයි
+    const authPath = path.join(__dirname, `/auth_info_baileys/${userNumber}/`);
+    
+    if (!fs.existsSync(authPath)) fs.mkdirSync(authPath, { recursive: true });
+    fs.writeFileSync(path.join(authPath, "creds.json"), JSON.stringify(sessionData.creds));
 
     const pluginsPath = path.join(__dirname, "plugins");
     fs.readdirSync(pluginsPath).forEach((plugin) => {
         if (path.extname(plugin).toLowerCase() === ".js") {
             try {
                 require(`./plugins/${plugin}`);
-                console.log(`[Loader] Loaded: ${plugin}`);
             } catch (e) {
                 console.error(`[Loader] Error ${plugin}:`, e);
             }
         }
     });
 
-    console.log(`[SYS] ${global.CURRENT_BOT_SETTINGS.botName} | Prefix: ${global.CURRENT_BOT_SETTINGS.prefix} | Loaded: ${commands.length} Commands`);
-
-    const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, "/auth_info_baileys/"));
+    const { state, saveCreds } = await useMultiFileAuthState(authPath);
     const { version } = await fetchLatestBaileysVersion();
 
     const zanta = makeWASocket({
@@ -107,9 +110,9 @@ async function connectToWA() {
     zanta.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === "close") {
-            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) connectToWA();
+            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) connectToWA(sessionData);
         } else if (connection === "open") {
-            console.log("✅ ZANTA-MD Connected");
+            console.log(`✅ [${userNumber}] ZANTA-MD Connected`);
 
             setInterval(async () => {
                 if (global.CURRENT_BOT_SETTINGS.alwaysOnline === 'true') {
@@ -122,12 +125,17 @@ async function connectToWA() {
             const ownerJid = decodeJid(zanta.user.id);
             await zanta.sendMessage(ownerJid, {
                 image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/alive-new.jpg?raw=true` },
-                caption: `${global.CURRENT_BOT_SETTINGS.botName} connected ✅\n\nPREFIX: ${global.CURRENT_BOT_SETTINGS.prefix}\nTOTAL COMMANDS: ${commands.length}`,
+                caption: `${global.CURRENT_BOT_SETTINGS.botName} connected ✅\n\nUSER: ${userNumber}\nPREFIX: ${global.CURRENT_BOT_SETTINGS.prefix}`,
             });
         }
     });
 
-    zanta.ev.on("creds.update", saveCreds);
+    // [වෙනස 5]: Creds update උනොත් MongoDB එකටත් update කරනවා (බොට් disconnect වීම වැලකීමට)
+    zanta.ev.on("creds.update", async () => {
+        await saveCreds();
+        const updatedCreds = JSON.parse(fs.readFileSync(path.join(authPath, "creds.json"), "utf-8"));
+        await Session.findOneAndUpdate({ number: userNumber }, { creds: updatedCreds });
+    });
 
     zanta.ev.on("messages.upsert", async ({ messages }) => {
         const mek = messages[0];
@@ -176,17 +184,18 @@ async function connectToWA() {
         const isBotAdmins = isGroup ? groupAdmins.includes(botNumber2) : false;
         const isAdmins = isGroup ? groupAdmins.includes(sender) : false;
 
+        // --- Anti Badwords (ඔයාගේ මුල් Logic එකමයි) ---
         if (isGroup && global.CURRENT_BOT_SETTINGS.antiBadword === 'true' && !isAdmins && !isOwner) {
             const badWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප", "huththa", "pakaya" , "kariya", "hukanna", "pkya", "wezi", "hutta", "hutt", "pky", "ponnaya", "ponnya", "balla", "love"]; 
             const hasBadWord = badWords.some(word => body.toLowerCase().includes(word));
 
             if (hasBadWord) {
-                await zanta.sendMessage(from, { delete: mek.key }); // මැසේජ් එක මකනවා
+                await zanta.sendMessage(from, { delete: mek.key });
                 await zanta.sendMessage(from, { 
                     text: `⚠️ *@${sender.split('@')[0]} ඔබේ පණිවිඩය ඉවත් කරන ලදී!*`,
                     mentions: [sender]
                 });
-                return; // වැඩිදුර Process කිරීම නවත්වනවා
+                return;
             }
         }
         
@@ -239,6 +248,8 @@ async function connectToWA() {
     });
 }
 
-ensureSessionFile();
-app.get("/", (req, res) => res.send(`Hey, ${global.CURRENT_BOT_SETTINGS.botName} Online ✅`));
+// පද්ධතිය ආරම්භ කරයි
+startSystem();
+
+app.get("/", (req, res) => res.send(`Hey, Multi-Bot System Online ✅`));
 app.listen(port, () => console.log(`Server on port ${port}`));
