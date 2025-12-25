@@ -1,5 +1,6 @@
 const { cmd } = require("../command");
 const axios = require('axios');
+const config = require('../config');
 
 cmd({
     pattern: "apk",
@@ -8,7 +9,7 @@ cmd({
     desc: "Search and download APK files from multiple sources.",
     category: "download",
     filename: __filename
-}, async (zanta, mek, m, { from, reply, q }) => {
+}, async (zanta, mek, m, { from, reply, q, userSettings }) => { // <--- userSettings එකතු කළා
     try {
         if (!q) return reply("❌ *කරුණාකර ඇප් එකේ නම ලබා දෙන්න. (Ex: .apk FB)*");
 
@@ -16,7 +17,7 @@ cmd({
 
         let appData = null;
 
-        // --- ක්‍රමය 1: BK9 API (දැනට වැඩ කරන ස්ථාවරම එක) ---
+        // --- ක්‍රමය 1: BK9 API ---
         try {
             const res1 = await axios.get(`https://bk9.fun/download/apk?q=${encodeURIComponent(q)}`);
             if (res1.data && res1.data.status && res1.data.BK9) {
@@ -30,7 +31,7 @@ cmd({
             }
         } catch (e) { console.log("Method 1 failed"); }
 
-        // --- ක්‍රමය 2: වැඩ නැත්නම් (Fallback to Shinoa API) ---
+        // --- ක්‍රමය 2: Fallback ---
         if (!appData) {
             try {
                 const res2 = await axios.get(`https://api.shinoa.xyz/api/apk/search?q=${encodeURIComponent(q)}`);
@@ -59,7 +60,10 @@ cmd({
             return reply(`⏳ *ප්‍රමාණය වැඩි බැවින් (${sizeStr}) බොට් හරහා ලබා දිය නොහැක.*`);
         }
 
-        const botName = global.CURRENT_BOT_SETTINGS?.botName || "ZANTA-MD";
+        // [වැදගත්]: ඩේටාබේස් සෙටින්ග්ස් ලබා ගැනීම
+        const settings = userSettings || global.CURRENT_BOT_SETTINGS;
+        const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
+
         let desc = `
 ╭━─━─━─━─━─━─━─━╮
 ┃    *📦 APK DOWNLOADER*
@@ -75,7 +79,6 @@ cmd({
 
         await zanta.sendMessage(from, { image: { url: appData.icon }, caption: desc }, { quoted: mek });
 
-        // APK එක එවමු
         await zanta.sendMessage(from, {
             document: { url: appData.dl },
             mimetype: "application/vnd.android.package-archive",
@@ -89,7 +92,7 @@ cmd({
     }
 });
 
-// 🕺 TIKTOK DOWNLOADER (FIXED)
+// 🕺 TIKTOK DOWNLOADER
 cmd({
     pattern: "tiktok",
     alias: ["ttdl", "tt"],
@@ -97,17 +100,15 @@ cmd({
     desc: "Download TikTok Video without watermark.",
     category: "download",
     filename: __filename
-}, async (zanta, mek, m, { from, reply, q }) => {
+}, async (zanta, mek, m, { from, reply, q, userSettings }) => { // <--- userSettings එකතු කළා
     try {
         if (!q) return reply("❌ *කරුණාකර TikTok Link එකක් ලබා දෙන්න.*");
 
-        // ලින්ක් එක පිරිසිදු කිරීම
         let inputUrl = q.trim();
         if (!inputUrl.includes("tiktok.com")) return reply("❌ *කරුණාකර වලංගු TikTok Link එකක් ලබා දෙන්න.*");
 
         await reply("🔄 *TikTok වීඩියෝව ලබා ගනිමින් පවතී...*");
 
-        // Tikwm API එක පාවිච්චි කරමු (මේක ගොඩක් ස්ථාවරයි)
         const response = await axios.get(`https://www.tikwm.com/api/?url=${inputUrl}`);
         const data = response.data;
 
@@ -116,10 +117,13 @@ cmd({
         }
 
         const videoData = data.data;
-        const botName = global.CURRENT_BOT_SETTINGS?.botName || "ZANTA-MD";
+
+        // [වැදගත්]: ඩේටාබේස් සෙටින්ග්ස් ලබා ගැනීම
+        const settings = userSettings || global.CURRENT_BOT_SETTINGS;
+        const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
 
         await zanta.sendMessage(from, {
-            video: { url: videoData.play }, // No watermark video
+            video: { url: videoData.play },
             mimetype: "video/mp4",
             caption: `
 ╭━─━─━─━─━─━─━─━╮
