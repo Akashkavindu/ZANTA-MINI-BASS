@@ -1,6 +1,7 @@
 const { cmd } = require("../command");
 const os = require('os');
 const { runtime } = require('../lib/functions');
+const config = require("../config");
 
 const STATUS_IMAGE_URL = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/alive-new.jpg?raw=true";
 
@@ -19,14 +20,17 @@ cmd({
     category: "main",
     filename: __filename,
 },
-async (zanta, mek, m, { from, reply }) => {
+async (zanta, mek, m, { from, reply, userSettings }) => { // <--- userSettings එකතු කළා
     try {
         const startTime = Date.now();
+
+        // [වැදගත්]: ඩේටාබේස් සෙටින්ග්ස් ලබා ගැනීම
+        const settings = userSettings || global.CURRENT_BOT_SETTINGS;
+        const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
 
         // පණිවිඩය යවා එහි key එක ලබා ගනී (පසුව මැකීමට)
         const loadingMsg = await reply("*⚙️ Bot තොරතුරු එකතු කරමින්...*");
 
-        const botName = global.CURRENT_BOT_SETTINGS.botName;
         const memoryUsage = process.memoryUsage();
         const latency = Date.now() - startTime;
 
