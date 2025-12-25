@@ -9,10 +9,12 @@ cmd({
     category: "main",
     filename: __filename
 },
-async (zanta, mek, m, { from, reply }) => {
+async (zanta, mek, m, { from, reply, userSettings }) => { // <--- මෙතනට userSettings ඇතුළත් කළා
     try {
-        // Database එකෙන් එන අලුත්ම settings ලබා ගනී
-        const { botName, prefix } = global.CURRENT_BOT_SETTINGS;
+        // [වැදගත්]: ඩේටාබේස් එකෙන් එන userSettings ලබා ගනී, නැත්නම් Default settings ගනී
+        const settings = userSettings || global.CURRENT_BOT_SETTINGS;
+        const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
+        const prefix = settings.prefix || config.DEFAULT_PREFIX || ".";
 
         // aliveMsg.js එකෙන් template එක ගෙන placeholders replace කිරීම
         const finalMsg = aliveMsg.getAliveMessage()
