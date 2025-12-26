@@ -6,22 +6,31 @@ const {
     getContentType,
     fetchLatestBaileysVersion,
     Browsers,
+    generateForwardMessageContent,
+    prepareWAMessageMedia
 } = require("@whiskeysockets/baileys");
 
 const fs = require("fs");
 const P = require("pino");
 const express = require("express");
 const path = require("path");
+const mongoose = require("mongoose");
 const config = require("./config");
 const { sms } = require("./lib/msg");
 const { getGroupAdmins } = require("./lib/functions");
-const { File } = require("megajs");
 const { commands, replyHandlers } = require("./command");
 
 const { lastMenuMessage } = require("./plugins/menu");
 const { lastSettingsMessage } = require("./plugins/settings"); 
 const { lastHelpMessage } = require("./plugins/help"); 
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
+
+// MongoDB Session Schema
+const SessionSchema = new mongoose.Schema({
+    number: { type: String, required: true, unique: true },
+    creds: { type: Object, required: true }
+}, { collection: 'sessions' });
+const Session = mongoose.models.Session || mongoose.model("Session", SessionSchema);
 
 const decodeJid = (jid) => {
     if (!jid) return jid;
@@ -40,57 +49,72 @@ global.CURRENT_BOT_SETTINGS = {
 
 const app = express();
 const port = process.env.PORT || 8000;
-const credsPath = path.join(__dirname, "/auth_info_baileys/creds.json");
-const messagesStore = {};
+const messagesStore = {}; 
 
-// --- 🗑️ Bad Words List ---
-const customBadWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප"];
+// Error Handling
+process.on('uncaughtException', (err) => {
+    if (err.message.includes('Connection Closed')) return;
+    console.error('⚠️ Exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+    if (reason?.message?.includes('Connection Closed') || reason?.message?.includes('Unexpected end of JSON')) return;
+    console.error('⚠️ Rejection:', reason);
+});
 
-process.on('uncaughtException', (err) => console.error('⚠️ Exception:', err));
-process.on('unhandledRejection', (reason) => console.error('⚠️ Rejection:', reason));
-
-async function ensureSessionFile() {
-    if (!fs.existsSync(credsPath)) {
-        if (!config.SESSION_ID) {
-            console.error("❌ SESSION_ID missing.");
-            process.exit(1);
-        }
-        console.log("🔄 Downloading session from MEGA...");
-        const filer = File.fromURL(`https://mega.nz/file/${config.SESSION_ID}`);
-        filer.download((err, data) => {
-            if (err) {
-                console.error("❌ Download failed:", err);
-                process.exit(1);
-            }
-            fs.mkdirSync(path.join(__dirname, "/auth_info_baileys/"), { recursive: true });
-            fs.writeFileSync(credsPath, data);
-            console.log("✅ Session saved. Restarting...");
-            setTimeout(() => connectToWA(), 2000);
-        });
-    } else {
-        setTimeout(() => connectToWA(), 1000);
-    }
-}
-
-async function connectToWA() {
-    await connectDB();
-    global.CURRENT_BOT_SETTINGS = await getBotSettings();
-
+async function loadPlugins() {
     const pluginsPath = path.join(__dirname, "plugins");
     fs.readdirSync(pluginsPath).forEach((plugin) => {
         if (path.extname(plugin).toLowerCase() === ".js") {
             try {
                 require(`./plugins/${plugin}`);
-                console.log(`[Loader] Loaded: ${plugin}`);
             } catch (e) {
                 console.error(`[Loader] Error ${plugin}:`, e);
             }
         }
     });
+    console.log(`✨ Loaded: ${commands.length} Commands`);
+}
 
-    console.log(`[SYS] ${global.CURRENT_BOT_SETTINGS.botName} | Prefix: ${global.CURRENT_BOT_SETTINGS.prefix} | Loaded: ${commands.length} Commands`);
+async function startSystem() {
+    await connectDB(); 
+    await loadPlugins();
 
-    const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, "/auth_info_baileys/"));
+    const allSessions = await Session.find({});
+    console.log(`📂 Found ${allSessions.length} sessions in Database. Connecting...`);
+
+    for (let sessionData of allSessions) {
+        await connectToWA(sessionData);
+    }
+
+    Session.watch().on('change', async (data) => {
+        if (data.operationType === 'insert') {
+            const newSession = data.fullDocument;
+            console.log(`🆕 New session detected: ${newSession.number}. Connecting...`);
+            await connectToWA(newSession);
+        }
+    });
+
+    // --- 🧹 RAM CLEANER (EVERY 2 HOURS) ---
+    setInterval(() => {
+        Object.keys(messagesStore).forEach(key => delete messagesStore[key]);
+        console.log("🧹 RAM Cleaner: Messages store cleared.");
+    }, 2 * 60 * 60 * 1000); 
+}
+
+async function connectToWA(sessionData) {
+    const userNumber = sessionData.number.split("@")[0];
+    let userSettings = await getBotSettings(userNumber);
+
+    const authPath = path.join(__dirname, `/auth_info_baileys/${userNumber}/`);
+    if (!fs.existsSync(authPath)) fs.mkdirSync(authPath, { recursive: true });
+
+    try {
+        fs.writeFileSync(path.join(authPath, "creds.json"), JSON.stringify(sessionData.creds));
+    } catch (e) {
+        console.error(`[${userNumber}] Auth Write Error:`, e);
+    }
+
+    const { state, saveCreds } = await useMultiFileAuthState(authPath);
     const { version } = await fetchLatestBaileysVersion();
 
     const zanta = makeWASocket({
@@ -99,74 +123,128 @@ async function connectToWA() {
         browser: Browsers.macOS("Firefox"),
         auth: state,
         version,
-        syncFullHistory: true,
+        syncFullHistory: false,
         markOnlineOnConnect: false,
         generateHighQualityLinkPreview: true,
+        getMessage: async (key) => {
+            if (messagesStore[key.id]) return messagesStore[key.id].message;
+            return { conversation: "ZANTA-MD Anti-Delete System" };
+        }
     });
 
     zanta.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === "close") {
-            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) connectToWA();
+            const reason = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.output?.payload?.statusCode;
+            if (reason === DisconnectReason.loggedOut || reason === 401) {
+                console.log(`🚫 [${userNumber}] Logged out. Deleting session...`);
+                await Session.deleteOne({ number: sessionData.number });
+                if (fs.existsSync(authPath)) fs.rmSync(authPath, { recursive: true, force: true });
+            } else {
+                connectToWA(sessionData);
+            }
         } else if (connection === "open") {
-            console.log("✅ ZANTA-MD Connected");
+            console.log(`✅ [${userNumber}] ZANTA-MD Connected`);
 
             setInterval(async () => {
-                if (global.CURRENT_BOT_SETTINGS.alwaysOnline === 'true') {
-                    await zanta.sendPresenceUpdate('available');
-                } else {
-                    await zanta.sendPresenceUpdate('unavailable');
-                }
+                try {
+                    const presence = userSettings.alwaysOnline === 'true' ? 'available' : 'unavailable';
+                    await zanta.sendPresenceUpdate(presence);
+                } catch (e) {}
             }, 10000);
 
             const ownerJid = decodeJid(zanta.user.id);
             await zanta.sendMessage(ownerJid, {
                 image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/alive-new.jpg?raw=true` },
-                caption: `${global.CURRENT_BOT_SETTINGS.botName} connected ✅\n\nPREFIX: ${global.CURRENT_BOT_SETTINGS.prefix}\nTOTAL COMMANDS: ${commands.length}`,
+                caption: `${userSettings.botName} connected ✅\n\nPREFIX: ${userSettings.prefix}\nTOTAL COMMANDS: ${commands.length}`,
             });
         }
     });
 
-    zanta.ev.on("creds.update", saveCreds);
+    zanta.ev.on("creds.update", async () => {
+        await saveCreds();
+        const credsFile = path.join(authPath, "creds.json");
+        try {
+            if (fs.existsSync(credsFile)) {
+                const updatedCreds = JSON.parse(fs.readFileSync(credsFile, "utf-8"));
+                await Session.findOneAndUpdate({ number: sessionData.number }, { creds: updatedCreds });
+            }
+        } catch (e) {}
+    });
 
     zanta.ev.on("messages.upsert", async ({ messages }) => {
         const mek = messages[0];
         if (!mek || !mek.message) return;
 
-        if (global.CURRENT_BOT_SETTINGS.autoStatusSeen === 'true' && mek.key.remoteJid === "status@broadcast") {
-            await zanta.readMessages([mek.key]);
+        // --- 🛡️ FIXED ANTI-DELETE SYSTEM ---
+        const type = getContentType(mek.message);
+        const from = mek.key.remoteJid;
+
+        if (type === 'protocolMessage' && mek.message.protocolMessage.type === 0) {
+            // Check if Anti-Delete is ON in Settings
+            if (userSettings.antiDelete === 'true') {
+                const key = mek.message.protocolMessage.key;
+                const storedMsg = messagesStore[key.id];
+
+                if (storedMsg && !storedMsg.key.fromMe) {
+                    const participant = key.participant || key.remoteJid;
+                    const senderTag = participant.split('@')[0];
+
+                    let report = `*🚨 ZANTA-MD ANTI-DELETE DETECTED! 🚨*\n\n` +
+                                 `*👤 Sender:* @${senderTag}\n`;
+
+                    await zanta.relayMessage(from, {
+                        [getContentType(storedMsg.message)]: storedMsg.message[getContentType(storedMsg.message)],
+                        contextInfo: {
+                            mentionedJid: [participant],
+                            externalAdReply: {
+                                title: "ZANTA-MD ANTI-DELETE",
+                                body: `Deleted by @${senderTag}`,
+                                mediaType: 1,
+                                thumbnailUrl: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/alive-new.jpg?raw=true`,
+                                renderLargerThumbnail: false,
+                                sourceUrl: ""
+                            }
+                        }
+                    }, {});
+
+                    await zanta.sendMessage(from, { text: report, mentions: [participant] }, { quoted: storedMsg });
+                    delete messagesStore[key.id];
+                }
+            }
             return;
         }
 
-        if (mek.key.id && !mek.key.fromMe) messagesStore[mek.key.id] = mek;
+        if (mek.key.id && !mek.key.fromMe) {
+            messagesStore[mek.key.id] = JSON.parse(JSON.stringify(mek)); 
+        }
+        // --- END ANTI-DELETE ---
+
+        if (userSettings.autoStatusSeen === 'true' && from === "status@broadcast") {
+            await zanta.readMessages([mek.key]);
+            return;
+        }
 
         mek.message = getContentType(mek.message) === "ephemeralMessage" 
             ? mek.message.ephemeralMessage.message : mek.message;
 
         const m = sms(zanta, mek);
-        const type = getContentType(mek.message);
-        const from = mek.key.remoteJid;
         const body = type === "conversation" ? mek.message.conversation : mek.message[type]?.text || mek.message[type]?.caption || "";
 
-        const prefix = global.CURRENT_BOT_SETTINGS.prefix;
+        const prefix = userSettings.prefix;
         const isCmd = body.startsWith(prefix);
         const commandName = isCmd ? body.slice(prefix.length).trim().split(" ")[0].toLowerCase() : "";
         const args = body.trim().split(/ +/).slice(1);
 
         const sender = mek.key.fromMe ? zanta.user.id : (mek.key.participant || mek.key.remoteJid);
         const decodedSender = decodeJid(sender);
-        const decodedBot = decodeJid(zanta.user.id);
         const senderNumber = decodedSender.split("@")[0].replace(/[^\d]/g, '');
         const configOwner = config.OWNER_NUMBER.replace(/[^\d]/g, '');
+        const isOwner = mek.key.fromMe || senderNumber === configOwner;
 
-        const isOwner = mek.key.fromMe || 
-                        sender === zanta.user.id || 
-                        decodedSender === decodedBot || 
-                        senderNumber === configOwner;
-
-        if (global.CURRENT_BOT_SETTINGS.autoRead === 'true') await zanta.readMessages([mek.key]);
-        if (global.CURRENT_BOT_SETTINGS.autoTyping === 'true') await zanta.sendPresenceUpdate('composing', from);
-        if (global.CURRENT_BOT_SETTINGS.autoVoice === 'true' && !mek.key.fromMe) await zanta.sendPresenceUpdate('recording', from);
+        if (userSettings.autoRead === 'true') await zanta.readMessages([mek.key]);
+        if (userSettings.autoTyping === 'true') await zanta.sendPresenceUpdate('composing', from);
+        if (userSettings.autoVoice === 'true' && !mek.key.fromMe) await zanta.sendPresenceUpdate('recording', from);
 
         const botNumber2 = await jidNormalizedUser(zanta.user.id);
         const isGroup = from.endsWith("@g.us");
@@ -176,20 +254,16 @@ async function connectToWA() {
         const isBotAdmins = isGroup ? groupAdmins.includes(botNumber2) : false;
         const isAdmins = isGroup ? groupAdmins.includes(sender) : false;
 
-        if (isGroup && global.CURRENT_BOT_SETTINGS.antiBadword === 'true' && !isAdmins && !isOwner) {
-            const badWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප", "huththa", "pakaya" , "kariya", "hukanna", "pkya", "wezi", "hutta", "hutt", "pky", "ponnaya", "ponnya", "balla", "love"]; 
-            const hasBadWord = badWords.some(word => body.toLowerCase().includes(word));
-
-            if (hasBadWord) {
+        // Anti-Badword
+        if (isGroup && userSettings.antiBadword === 'true' && !isAdmins && !isOwner) {
+            const badWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප", "huththa", "pakaya", "ponnayo", "hukanno", "kariyo" , "kariya", "hukanna", "wezi", "hutta", "ponnaya", "balla"]; 
+            if (badWords.some(word => body.toLowerCase().includes(word))) {
                 await zanta.sendMessage(from, { delete: mek.key });
-                await zanta.sendMessage(from, { 
-                    text: `⚠️ *@${sender.split('@')[0]} ඔබේ පණිවිඩය ඉවත් කරන ලදී!*`,
-                    mentions: [sender]
-                });
+                await zanta.sendMessage(from, { text: `⚠️ *@${sender.split('@')[0]} ඔබේ පණිවිඩය ඉවත් කරන ලදී!*`, mentions: [sender] });
                 return;
             }
         }
-        
+
         const reply = (text) => zanta.sendMessage(from, { text }, { quoted: mek });
         const isMenuReply = (m.quoted && lastMenuMessage && lastMenuMessage.get(from) === m.quoted.id);
         const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
@@ -199,18 +273,21 @@ async function connectToWA() {
             const input = body.trim().split(" ");
             const num = input[0];
             const value = input.slice(1).join(" ");
-            let dbKeys = ["", "botName", "ownerName", "prefix", "autoRead", "autoTyping", "autoStatusSeen", "alwaysOnline", "readCmd", "autoVoice" , "antiBadword"];
+            // Added antiDelete to the keys
+            let dbKeys = ["", "botName", "ownerName", "prefix", "autoRead", "autoTyping", "autoStatusSeen", "alwaysOnline", "readCmd", "autoVoice" , "antiBadword", "antiDelete"];
             let dbKey = dbKeys[parseInt(num)];
 
             if (dbKey) {
-                let finalValue = (['4', '5', '6', '7', '8', '9', '10'].includes(num)) 
+                // Included '11' in the toggle validation
+                let finalValue = (['4', '5', '6', '7', '8', '9', '10', '11'].includes(num)) 
                     ? ((value.toLowerCase() === 'on' || value.toLowerCase() === 'true') ? 'true' : 'false') : value;
-                const success = await updateSetting(dbKey, finalValue);
+
+                const success = await updateSetting(userNumber, dbKey, finalValue);
                 if (success) {
-                    global.CURRENT_BOT_SETTINGS[dbKey] = finalValue;
+                    userSettings[dbKey] = finalValue;
                     await reply(`✅ *${dbKey}* updated to: *${finalValue}*`);
-                    const cmd = commands.find(c => c.pattern === 'settings');
-                    if (cmd) cmd.function(zanta, mek, m, { from, reply, isOwner, prefix });
+                    const cmdSettings = commands.find(c => c.pattern === 'settings');
+                    if (cmdSettings) cmdSettings.function(zanta, mek, m, { from, reply, isOwner, prefix, userSettings }); 
                     return;
                 }
             }
@@ -222,14 +299,14 @@ async function connectToWA() {
             const cmd = commands.find(c => c.pattern === execName || (c.alias && c.alias.includes(execName)));
 
             if (cmd) {
-                if (global.CURRENT_BOT_SETTINGS.readCmd === 'true') await zanta.readMessages([mek.key]);
+                if (userSettings.readCmd === 'true') await zanta.readMessages([mek.key]);
                 if (cmd.react) zanta.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
                 try {
-                    cmd.function(zanta, mek, m, {
+                    await cmd.function(zanta, mek, m, {
                         from, quoted: mek, body, isCmd, command: execName, args: execArgs, q: execArgs.join(" "),
                         isGroup, sender, senderNumber, botNumber2, botNumber: senderNumber, pushname: mek.pushName || "User",
                         isMe: mek.key.fromMe, isOwner, groupMetadata, groupName: groupMetadata.subject, participants,
-                        groupAdmins, isBotAdmins, isAdmins, reply, prefix
+                        groupAdmins, isBotAdmins, isAdmins, reply, prefix, userSettings 
                     });
                 } catch (e) {
                     console.error("[ERROR]", e);
@@ -239,6 +316,7 @@ async function connectToWA() {
     });
 }
 
-ensureSessionFile();
-app.get("/", (req, res) => res.send(`Hey, ${global.CURRENT_BOT_SETTINGS.botName} Online ✅`));
-app.listen(port, () => console.log(`Server on port ${port}`));
+startSystem();
+
+app.get("/", (req, res) => res.send("ZANTA-MD Multi-Bot System Online ✅"));
+app.listen(port, '0.0.0.0', () => console.log(`Server on port ${port}`));
