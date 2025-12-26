@@ -47,7 +47,7 @@ global.CURRENT_BOT_SETTINGS = {
 
 const app = express();
 const port = process.env.PORT || 8000;
-const messagesStore = {}; // මකන මැසේජ් හොයාගැනීමට ඇති තාවකාලික ගබඩාව
+const messagesStore = {}; 
 
 // අනවශ්‍ය Rejection Logs පාලනය
 process.on('uncaughtException', (err) => {
@@ -55,7 +55,7 @@ process.on('uncaughtException', (err) => {
     console.error('⚠️ Exception:', err);
 });
 process.on('unhandledRejection', (reason) => {
-    if (reason?.message?.includes('Connection Closed')) return;
+    if (reason?.message?.includes('Connection Closed') || reason?.message?.includes('Unexpected end of JSON')) return;
     console.error('⚠️ Rejection:', reason);
 });
 
@@ -97,7 +97,13 @@ async function connectToWA(sessionData) {
 
     const authPath = path.join(__dirname, `/auth_info_baileys/${userNumber}/`);
     if (!fs.existsSync(authPath)) fs.mkdirSync(authPath, { recursive: true });
-    fs.writeFileSync(path.join(authPath, "creds.json"), JSON.stringify(sessionData.creds));
+    
+    // Render JSON Error Fix: JSON එක ලියන්න කලින් Check කිරීම
+    try {
+        fs.writeFileSync(path.join(authPath, "creds.json"), JSON.stringify(sessionData.creds));
+    } catch (e) {
+        console.error(`[${userNumber}] Error writing creds:`, e);
+    }
 
     const { state, saveCreds } = await useMultiFileAuthState(authPath);
     const { version } = await fetchLatestBaileysVersion();
@@ -111,7 +117,6 @@ async function connectToWA(sessionData) {
         syncFullHistory: false,
         markOnlineOnConnect: false,
         generateHighQualityLinkPreview: true,
-        // මැසේජ් එකක් මැකුවොත් අපේ ගබඩාවෙන් ඒක ලබාගැනීම
         getMessage: async (key) => {
             if (messagesStore[key.id]) return messagesStore[key.id].message;
             return { conversation: "ZANTA-MD Anti-Delete" };
@@ -151,9 +156,16 @@ async function connectToWA(sessionData) {
     zanta.ev.on("creds.update", async () => {
         await saveCreds();
         const credsFile = path.join(authPath, "creds.json");
-        if (fs.existsSync(credsFile)) {
-            const updatedCreds = JSON.parse(fs.readFileSync(credsFile, "utf-8"));
-            await Session.findOneAndUpdate({ number: sessionData.number }, { creds: updatedCreds });
+        try {
+            if (fs.existsSync(credsFile)) {
+                const rawData = fs.readFileSync(credsFile, "utf-8");
+                if (rawData && rawData.trim().length > 0) {
+                    const updatedCreds = JSON.parse(rawData);
+                    await Session.findOneAndUpdate({ number: sessionData.number }, { creds: updatedCreds });
+                }
+            }
+        } catch (e) {
+            // JSON Error එක මඟහරියි
         }
     });
 
@@ -161,24 +173,27 @@ async function connectToWA(sessionData) {
         const mek = messages[0];
         if (!mek || !mek.message) return;
 
-        // --- 🛡️ ANTI-DELETE LOGIC START ---
+        // --- 🛡️ ANTI-DELETE LOGIC START (LOOP FIXED) ---
         if (mek.message.protocolMessage && mek.message.protocolMessage.type === 0) {
             if (userSettings.antiDelete === 'true') {
                 const key = mek.message.protocolMessage.key;
                 const deletedMsg = messagesStore[key.id];
 
-                if (deletedMsg) {
+                // බොට් විසින්ම ඩිලීට් කරන මැසේජ් වලට රිප්ලයි කිරීමෙන් වළකියි
+                if (deletedMsg && !deletedMsg.key.fromMe) {
                     const from = key.remoteJid;
                     const participant = key.participant || key.remoteJid;
                     let report = `*🚨 ANTI-DELETE DETECTED!* \n\n*👤 Sender:* @${participant.split('@')[0]}\n*💬 Message Below:*`;
 
                     await zanta.sendMessage(from, { text: report, mentions: [participant] }, { quoted: deletedMsg });
-                    await zanta.copyNForward(from, deletedMsg, false).catch(e => console.log(e));
+                    await zanta.copyNForward(from, deletedMsg, false).catch(e => {});
+                    delete messagesStore[key.id]; // යැවූ පසු මැසේජ් එක අයින් කරයි
                 }
             }
             return;
         }
-        // මැසේජ් එකක් ආවම ඒක store එකට දාගන්නවා (එතකොටයි මැකුවොත් හොයාගන්න පුළුවන්)
+        
+        // අනුන්ගේ මැසේජ් පමණක් මතක තබා ගනී (RAM එක ඉතිරි කිරීමට)
         if (mek.key.id && !mek.key.fromMe) messagesStore[mek.key.id] = mek;
         // --- 🛡️ ANTI-DELETE LOGIC END ---
 
@@ -242,12 +257,10 @@ async function connectToWA(sessionData) {
             const input = body.trim().split(" ");
             const num = input[0];
             const value = input.slice(1).join(" ");
-            // --- ⚙️ මෙතනට antiDelete එකතු කළා ---
             let dbKeys = ["", "botName", "ownerName", "prefix", "autoRead", "autoTyping", "autoStatusSeen", "alwaysOnline", "readCmd", "autoVoice" , "antiBadword", "antiDelete"];
             let dbKey = dbKeys[parseInt(num)];
 
             if (dbKey) {
-                // 4 සිට 11 දක්වා තියෙන්නේ Boolean (true/false) අගයන්
                 let finalValue = (['4', '5', '6', '7', '8', '9', '10', '11'].includes(num)) 
                     ? ((value.toLowerCase() === 'on' || value.toLowerCase() === 'true') ? 'true' : 'false') : value;
 
