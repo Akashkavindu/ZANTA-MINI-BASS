@@ -5,7 +5,7 @@ const config = require('../config');
 const MONGO_URI = process.env.MONGODB_URL || process.env.MONGO_URI || config.MONGODB_URL; 
 
 const SettingsSchema = new mongoose.Schema({
-    id: { type: String, required: true, unique: true }, // මෙතනට සේව් වෙන්නේ @s.whatsapp.net නැති පිරිසිදු නම්බර් එක පමණි
+    id: { type: String, required: true, unique: true }, // මෙතනට සේව් වෙන්නේ පිරිසිදු නම්බර් එක පමණි
     botName: { type: String, default: config.DEFAULT_BOT_NAME },
     ownerName: { type: String, default: config.DEFAULT_OWNER_NAME },
     prefix: { type: String, default: config.DEFAULT_PREFIX },
@@ -15,7 +15,8 @@ const SettingsSchema = new mongoose.Schema({
     alwaysOnline: { type: String, default: 'false' },
     readCmd: { type: String, default: 'false' },
     autoVoice: { type: String, default: 'false' },
-    antiBadword: { type: String, default: 'false' }
+    antiBadword: { type: String, default: 'false' },
+    antiDelete: { type: String, default: 'false' } // <--- අලුතින් එකතු කළා
 });
 
 const Settings = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);
@@ -47,10 +48,11 @@ async function getBotSettings(userNumber) {
         alwaysOnline: 'false',
         readCmd: 'false',
         autoVoice: 'false',
-        antiBadword: 'false'
+        antiBadword: 'false',
+        antiDelete: 'false' // <--- Defaults වලටත් ඇතුළත් කළා
     };
 
-    const targetId = cleanId(userNumber); // @s.whatsapp.net අයින් කරනවා
+    const targetId = cleanId(userNumber);
     if (!targetId) return defaults;
 
     try {
@@ -67,7 +69,7 @@ async function getBotSettings(userNumber) {
 }
 
 async function updateSetting(userNumber, key, value) {
-    const targetId = cleanId(userNumber); // @s.whatsapp.net අයින් කරනවා
+    const targetId = cleanId(userNumber);
     if (!targetId) return false;
 
     try {
