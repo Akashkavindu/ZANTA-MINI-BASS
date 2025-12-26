@@ -49,7 +49,7 @@ const app = express();
 const port = process.env.PORT || 8000;
 const messagesStore = {}; 
 
-// අනවශ්‍ය Rejection Logs පාලනය
+// Error Handling
 process.on('uncaughtException', (err) => {
     if (err.message.includes('Connection Closed')) return;
     console.error('⚠️ Exception:', err);
@@ -77,30 +77,33 @@ async function startSystem() {
     await connectDB(); 
     await loadPlugins();
 
+    // MongoDB එකේ ඇති සියලුම Sessions ලබාගෙන ඒවා Connect කිරීම
     const allSessions = await Session.find({});
+    console.log(`📂 Found ${allSessions.length} sessions in Database. Connecting...`);
+    
     for (let sessionData of allSessions) {
         await connectToWA(sessionData);
     }
 
+    // අලුතින් Session එකක් එකතු වූ විට හඳුනා ගැනීම
     Session.watch().on('change', async (data) => {
         if (data.operationType === 'insert') {
             const newSession = data.fullDocument;
-            console.log(`🆕 New session detected for: ${newSession.number}. Connecting...`);
+            console.log(`🆕 New session detected: ${newSession.number}. Connecting...`);
             await connectToWA(newSession);
         }
     });
 
-    // --- 🧹 GLOBAL RAM CLEANER (විනාඩි 30කට වරක් පරණ මැසේජ් මතකයෙන් අයින් කරයි) ---
+    // --- 🧹 RAM CLEANER ---
     setInterval(() => {
         const now = Math.floor(Date.now() / 1000);
-        const ONE_HOUR = 3600; // තත්පර වලින්
-
+        const ONE_HOUR = 3600; 
         Object.keys(messagesStore).forEach(key => {
             if (now - messagesStore[key].messageTimestamp > ONE_HOUR) {
                 delete messagesStore[key];
             }
         });
-        console.log("🧹 RAM Cleaner: Old messages cleared from memory.");
+        console.log("🧹 RAM Cleaner: Old messages cleared.");
     }, 30 * 60 * 1000);
 }
 
@@ -111,10 +114,11 @@ async function connectToWA(sessionData) {
     const authPath = path.join(__dirname, `/auth_info_baileys/${userNumber}/`);
     if (!fs.existsSync(authPath)) fs.mkdirSync(authPath, { recursive: true });
     
+    // Creds file එක හරි විදිහට ලිවීම
     try {
         fs.writeFileSync(path.join(authPath, "creds.json"), JSON.stringify(sessionData.creds));
     } catch (e) {
-        console.error(`[${userNumber}] Error writing creds:`, e);
+        console.error(`[${userNumber}] Auth Write Error:`, e);
     }
 
     const { state, saveCreds } = await useMultiFileAuthState(authPath);
@@ -140,16 +144,16 @@ async function connectToWA(sessionData) {
         if (connection === "close") {
             const reason = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.output?.payload?.statusCode;
             if (reason === DisconnectReason.loggedOut || reason === 401) {
-                console.log(`🚫 [${userNumber}] Logged out. Cleaning up...`);
+                console.log(`🚫 [${userNumber}] Logged out. Deleting session...`);
                 await Session.deleteOne({ number: sessionData.number });
                 if (fs.existsSync(authPath)) fs.rmSync(authPath, { recursive: true, force: true });
-                return;
             } else {
-                connectToWA(sessionData);
+                connectToWA(sessionData); // අසමත් වුවහොත් නැවත උත්සාහ කරයි
             }
         } else if (connection === "open") {
             console.log(`✅ [${userNumber}] ZANTA-MD Connected`);
-
+            
+            // Always Online Feature
             setInterval(async () => {
                 try {
                     const presence = userSettings.alwaysOnline === 'true' ? 'available' : 'unavailable';
@@ -160,7 +164,7 @@ async function connectToWA(sessionData) {
             const ownerJid = decodeJid(zanta.user.id);
             await zanta.sendMessage(ownerJid, {
                 image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/alive-new.jpg?raw=true` },
-                caption: `${userSettings.botName} connected ✅\n\nUSER: ${userNumber}\nPREFIX: ${userSettings.prefix}\nTOTAL COMMANDS: ${commands.length}`,
+                caption: `🚀 *ZANTA-MD Connected!*\n\n*User:* ${userNumber}\n*Prefix:* ${userSettings.prefix}\n*Commands:* ${commands.length}`,
             });
         }
     });
@@ -170,11 +174,8 @@ async function connectToWA(sessionData) {
         const credsFile = path.join(authPath, "creds.json");
         try {
             if (fs.existsSync(credsFile)) {
-                const rawData = fs.readFileSync(credsFile, "utf-8");
-                if (rawData && rawData.trim().length > 0) {
-                    const updatedCreds = JSON.parse(rawData);
-                    await Session.findOneAndUpdate({ number: sessionData.number }, { creds: updatedCreds });
-                }
+                const updatedCreds = JSON.parse(fs.readFileSync(credsFile, "utf-8"));
+                await Session.findOneAndUpdate({ number: sessionData.number }, { creds: updatedCreds });
             }
         } catch (e) {}
     });
@@ -183,7 +184,7 @@ async function connectToWA(sessionData) {
         const mek = messages[0];
         if (!mek || !mek.message) return;
 
-        // --- 🛡️ ANTI-DELETE LOGIC START (LOOP & RAM FIXED) ---
+        // --- 🛡️ ANTI-DELETE (FIXED) ---
         if (mek.message.protocolMessage && mek.message.protocolMessage.type === 0) {
             if (userSettings.antiDelete === 'true') {
                 const key = mek.message.protocolMessage.key;
@@ -195,15 +196,16 @@ async function connectToWA(sessionData) {
                     let report = `*🚨 ANTI-DELETE DETECTED!* \n\n*👤 Sender:* @${participant.split('@')[0]}\n*💬 Message Below:*`;
 
                     await zanta.sendMessage(from, { text: report, mentions: [participant] }, { quoted: deletedMsg });
-                    await zanta.copyNForward(from, deletedMsg, false).catch(e => {});
+                    // copyNForward වෙනුවට හරි ක්‍රමය:
+                    await zanta.sendMessage(from, { forward: deletedMsg }, { quoted: deletedMsg });
                     delete messagesStore[key.id]; 
                 }
             }
             return;
         }
         
+        // අනෙක් අයගේ මැසේජ් මතකයේ තබා ගැනීම
         if (mek.key.id && !mek.key.fromMe) messagesStore[mek.key.id] = mek;
-        // --- 🛡️ ANTI-DELETE LOGIC END ---
 
         if (userSettings.autoStatusSeen === 'true' && mek.key.remoteJid === "status@broadcast") {
             await zanta.readMessages([mek.key]);
@@ -225,14 +227,10 @@ async function connectToWA(sessionData) {
 
         const sender = mek.key.fromMe ? zanta.user.id : (mek.key.participant || mek.key.remoteJid);
         const decodedSender = decodeJid(sender);
-        const decodedBot = decodeJid(zanta.user.id);
         const senderNumber = decodedSender.split("@")[0].replace(/[^\d]/g, '');
         const configOwner = config.OWNER_NUMBER.replace(/[^\d]/g, '');
 
-        const isOwner = mek.key.fromMe || 
-                        sender === zanta.user.id || 
-                        decodedSender === decodedBot || 
-                        senderNumber === configOwner;
+        const isOwner = mek.key.fromMe || senderNumber === configOwner;
 
         if (userSettings.autoRead === 'true') await zanta.readMessages([mek.key]);
         if (userSettings.autoTyping === 'true') await zanta.sendPresenceUpdate('composing', from);
@@ -246,8 +244,9 @@ async function connectToWA(sessionData) {
         const isBotAdmins = isGroup ? groupAdmins.includes(botNumber2) : false;
         const isAdmins = isGroup ? groupAdmins.includes(sender) : false;
 
+        // Anti-Badword
         if (isGroup && userSettings.antiBadword === 'true' && !isAdmins && !isOwner) {
-            const badWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප", "huththa", "pakaya", "huththo", "ponnayo", "hukanno", "kariyo" , "kariya", "hukanna", "pkya", "wezi", "hutta", "hutt", "pky", "ponnaya", "ponnya", "balla", "love"]; 
+            const badWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප", "huththa", "pakaya", "ponnayo", "hukanno", "kariyo" , "kariya", "hukanna", "wezi", "hutta", "ponnaya", "balla"]; 
             const hasBadWord = badWords.some(word => body.toLowerCase().includes(word));
             if (hasBadWord) {
                 await zanta.sendMessage(from, { delete: mek.key });
