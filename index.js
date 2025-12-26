@@ -89,6 +89,19 @@ async function startSystem() {
             await connectToWA(newSession);
         }
     });
+
+    // --- 🧹 GLOBAL RAM CLEANER (විනාඩි 30කට වරක් පරණ මැසේජ් මතකයෙන් අයින් කරයි) ---
+    setInterval(() => {
+        const now = Math.floor(Date.now() / 1000);
+        const ONE_HOUR = 3600; // තත්පර වලින්
+
+        Object.keys(messagesStore).forEach(key => {
+            if (now - messagesStore[key].messageTimestamp > ONE_HOUR) {
+                delete messagesStore[key];
+            }
+        });
+        console.log("🧹 RAM Cleaner: Old messages cleared from memory.");
+    }, 30 * 60 * 1000);
 }
 
 async function connectToWA(sessionData) {
@@ -98,7 +111,6 @@ async function connectToWA(sessionData) {
     const authPath = path.join(__dirname, `/auth_info_baileys/${userNumber}/`);
     if (!fs.existsSync(authPath)) fs.mkdirSync(authPath, { recursive: true });
     
-    // Render JSON Error Fix: JSON එක ලියන්න කලින් Check කිරීම
     try {
         fs.writeFileSync(path.join(authPath, "creds.json"), JSON.stringify(sessionData.creds));
     } catch (e) {
@@ -164,22 +176,19 @@ async function connectToWA(sessionData) {
                     await Session.findOneAndUpdate({ number: sessionData.number }, { creds: updatedCreds });
                 }
             }
-        } catch (e) {
-            // JSON Error එක මඟහරියි
-        }
+        } catch (e) {}
     });
 
     zanta.ev.on("messages.upsert", async ({ messages }) => {
         const mek = messages[0];
         if (!mek || !mek.message) return;
 
-        // --- 🛡️ ANTI-DELETE LOGIC START (LOOP FIXED) ---
+        // --- 🛡️ ANTI-DELETE LOGIC START (LOOP & RAM FIXED) ---
         if (mek.message.protocolMessage && mek.message.protocolMessage.type === 0) {
             if (userSettings.antiDelete === 'true') {
                 const key = mek.message.protocolMessage.key;
                 const deletedMsg = messagesStore[key.id];
 
-                // බොට් විසින්ම ඩිලීට් කරන මැසේජ් වලට රිප්ලයි කිරීමෙන් වළකියි
                 if (deletedMsg && !deletedMsg.key.fromMe) {
                     const from = key.remoteJid;
                     const participant = key.participant || key.remoteJid;
@@ -187,13 +196,12 @@ async function connectToWA(sessionData) {
 
                     await zanta.sendMessage(from, { text: report, mentions: [participant] }, { quoted: deletedMsg });
                     await zanta.copyNForward(from, deletedMsg, false).catch(e => {});
-                    delete messagesStore[key.id]; // යැවූ පසු මැසේජ් එක අයින් කරයි
+                    delete messagesStore[key.id]; 
                 }
             }
             return;
         }
         
-        // අනුන්ගේ මැසේජ් පමණක් මතක තබා ගනී (RAM එක ඉතිරි කිරීමට)
         if (mek.key.id && !mek.key.fromMe) messagesStore[mek.key.id] = mek;
         // --- 🛡️ ANTI-DELETE LOGIC END ---
 
@@ -300,5 +308,5 @@ async function connectToWA(sessionData) {
 
 startSystem();
 
-app.get("/", (req, res) => res.send("Multi-Bot System Online ✅"));
+app.get("/", (req, res) => res.send("ZANTA-MD Multi-Bot System Online ✅"));
 app.listen(port, '0.0.0.0', () => console.log(`Server on port ${port}`));
