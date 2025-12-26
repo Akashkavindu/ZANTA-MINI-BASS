@@ -15,7 +15,8 @@ const SettingsSchema = new mongoose.Schema({
     alwaysOnline: { type: String, default: 'false' },
     readCmd: { type: String, default: 'false' },
     autoVoice: { type: String, default: 'false' },
-    antiBadword: { type: String, default: 'false' }
+    antiBadword: { type: String, default: 'false' },
+    antiDelete: { type: String, default: 'false' } // 🆕 අලුතින් එක් කළා
 });
 
 const Settings = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);
@@ -47,8 +48,11 @@ async function getBotSettings(userNumber) {
         alwaysOnline: 'false',
         readCmd: 'false',
         autoVoice: 'false',
-        antiBadword: 'false'
+        antiBadword: 'false',
+        antiDelete: 'false' // 🆕 අලුතින් එක් කළා
     };
+
+    if (!userNumber) return defaults;
 
     const targetId = cleanId(userNumber);
     if (!targetId) return defaults;
@@ -66,11 +70,10 @@ async function getBotSettings(userNumber) {
     }
 }
 
+// 🛠️ මේ Function එකේ UserNumber එක අනුව Update වෙන්න පොඩි වෙනසක් කළා
 async function updateSetting(userNumber, key, value) {
-    const targetId = cleanId(userNumber);
-    if (!targetId) return false;
-
     try {
+        const targetId = cleanId(userNumber);
         const result = await Settings.findOneAndUpdate(
             { id: targetId },
             { $set: { [key]: value } },
