@@ -51,7 +51,7 @@ global.CURRENT_BOT_SETTINGS = {
 };
 
 const app = express();
-const port = process.env.PORT || 8000;
+const port = process.env.PORT || 5000;
 
 process.on('uncaughtException', (err) => {
     if (err.message.includes('Connection Closed') || err.message.includes('EPIPE')) return;
