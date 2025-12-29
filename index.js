@@ -23,7 +23,7 @@ const { commands, replyHandlers } = require("./command");
 const { lastMenuMessage } = require("./plugins/menu");
 const { lastSettingsMessage } = require("./plugins/settings"); 
 const { lastHelpMessage } = require("./plugins/help"); 
-const { ytsLinks } = require("./plugins/yts"); // 🆕 YTS Reply Logic සඳහා
+const { ytsLinks } = require("./plugins/yts"); // 🆕 YTS Reply Logic
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
 // --- MongoDB Schemas ---
@@ -33,7 +33,6 @@ const SessionSchema = new mongoose.Schema({
 }, { collection: 'sessions' });
 const Session = mongoose.models.Session || mongoose.model("Session", SessionSchema);
 
-// 🛡️ Anti-Delete Temp Messages Schema (විනාඩි 15කින් Auto-Delete වේ)
 const TempMsgSchema = new mongoose.Schema({
     msgId: { type: String, required: true, index: true },
     data: { type: Object, required: true },
@@ -59,7 +58,6 @@ global.CURRENT_BOT_SETTINGS = {
 const app = express();
 const port = process.env.PORT || 8000;
 
-// 🔇 Logs අවම කිරීම (අත්‍යවශ්‍ය නොවන warnings ඉවත් කරයි)
 process.on('uncaughtException', (err) => {
     if (err.message.includes('Connection Closed') || err.message.includes('EPIPE')) return;
     console.error('⚠️ Exception:', err);
@@ -115,7 +113,7 @@ async function connectToWA(sessionData) {
     const { version } = await fetchLatestBaileysVersion();
 
     const zanta = makeWASocket({
-        logger: P({ level: "fatal" }), // 🔇 අනවශ්‍ය logs සම්පූර්ණයෙන්ම නවත්වයි
+        logger: P({ level: "fatal" }), 
         printQRInTerminal: false,
         browser: Browsers.macOS("Firefox"),
         auth: state,
@@ -156,6 +154,15 @@ async function connectToWA(sessionData) {
 
         const type = getContentType(mek.message);
         const from = mek.key.remoteJid;
+        const isGroup = from.endsWith("@g.us");
+
+        // 🚀 HIGH-SPEED GROUP FILTER: Prefix එකක් නැති සාමාන්‍ය මැසේජ් Ignore කරයි (RAM ඉතුරු වේ)
+        const body = (type === "conversation") ? mek.message.conversation : (mek.message[type]?.text || mek.message[type]?.caption || "");
+        const prefix = userSettings.prefix;
+        const isCmd = body.startsWith(prefix);
+        const isQuotedReply = mek.message[type]?.contextInfo?.quotedMessage;
+
+        if (isGroup && !isCmd && !isQuotedReply && type !== 'protocolMessage') return;
 
         // --- 🛡️ MONGO-BASED ANTI-DELETE ---
         if (type === 'protocolMessage' && mek.message.protocolMessage.type === 0) {
@@ -171,7 +178,7 @@ async function connectToWA(sessionData) {
             }
             return;
         }
-        // Messages ඩේටාබේස් එකේ සේව් කිරීම (විනාඩි 15කට පමණයි)
+        
         if (mek.key.id && !mek.key.fromMe && type !== 'protocolMessage') {
             await TempMsg.updateOne({ msgId: mek.key.id }, { $set: { data: mek } }, { upsert: true });
         }
@@ -185,10 +192,6 @@ async function connectToWA(sessionData) {
             ? mek.message.ephemeralMessage.message : mek.message;
 
         const m = sms(zanta, mek);
-        const body = (type === "conversation") ? mek.message.conversation : (mek.message[type]?.text || mek.message[type]?.caption || "");
-
-        const prefix = userSettings.prefix;
-        const isCmd = body.startsWith(prefix);
         const commandName = isCmd ? body.slice(prefix.length).trim().split(" ")[0].toLowerCase() : "";
         const args = body.trim().split(/ +/).slice(1);
 
@@ -200,7 +203,6 @@ async function connectToWA(sessionData) {
         if (userSettings.autoTyping === 'true') await zanta.sendPresenceUpdate('composing', from);
         if (userSettings.autoVoice === 'true' && !mek.key.fromMe) await zanta.sendPresenceUpdate('recording', from);
 
-        const isGroup = from.endsWith("@g.us");
         const groupMetadata = isGroup ? await zanta.groupMetadata(from).catch(() => ({})) : {};
         const participants = isGroup ? groupMetadata.participants : [];
         const groupAdmins = isGroup ? participants.filter(p => p.admin !== null).map(p => p.id) : [];
