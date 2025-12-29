@@ -23,7 +23,7 @@ const { commands, replyHandlers } = require("./command");
 const { lastMenuMessage } = require("./plugins/menu");
 const { lastSettingsMessage } = require("./plugins/settings"); 
 const { lastHelpMessage } = require("./plugins/help"); 
-const { ytsLinks } = require("./plugins/yts"); // 🆕 YTS Reply Logic
+const { ytsLinks } = require("./plugins/yts"); 
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
 // --- MongoDB Schemas ---
@@ -155,21 +155,16 @@ async function connectToWA(sessionData) {
         const type = getContentType(mek.message);
         const from = mek.key.remoteJid;
         const isGroup = from.endsWith("@g.us");
-
-        // 🚀 HIGH-SPEED GROUP FILTER: Prefix එකක් නැති සාමාන්‍ය මැසේජ් Ignore කරයි (RAM ඉතුරු වේ)
         const body = (type === "conversation") ? mek.message.conversation : (mek.message[type]?.text || mek.message[type]?.caption || "");
         const prefix = userSettings.prefix;
         const isCmd = body.startsWith(prefix);
         const isQuotedReply = mek.message[type]?.contextInfo?.quotedMessage;
 
-        if (isGroup && !isCmd && !isQuotedReply && type !== 'protocolMessage') return;
-
-        // --- 🛡️ MONGO-BASED ANTI-DELETE ---
+        // --- 🛡️ 1. MONGO-BASED ANTI-DELETE (All messages stored) ---
         if (type === 'protocolMessage' && mek.message.protocolMessage.type === 0) {
             if (userSettings.antiDelete === 'true') {
                 const key = mek.message.protocolMessage.key;
                 const storedMsg = await TempMsg.findOne({ msgId: key.id });
-
                 if (storedMsg && !storedMsg.data.key.fromMe) {
                     const participant = key.participant || key.remoteJid;
                     await zanta.relayMessage(from, storedMsg.data.message, { messageId: storedMsg.msgId });
@@ -179,6 +174,7 @@ async function connectToWA(sessionData) {
             return;
         }
         
+        // Save every message for Anti-Delete purposes
         if (mek.key.id && !mek.key.fromMe && type !== 'protocolMessage') {
             await TempMsg.updateOne({ msgId: mek.key.id }, { $set: { data: mek } }, { upsert: true });
         }
@@ -191,13 +187,32 @@ async function connectToWA(sessionData) {
         mek.message = getContentType(mek.message) === "ephemeralMessage" 
             ? mek.message.ephemeralMessage.message : mek.message;
 
-        const m = sms(zanta, mek);
-        const commandName = isCmd ? body.slice(prefix.length).trim().split(" ")[0].toLowerCase() : "";
-        const args = body.trim().split(/ +/).slice(1);
-
         const sender = mek.key.fromMe ? zanta.user.id : (mek.key.participant || mek.key.remoteJid);
         const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
+
+        // --- 🛡️ 2. ANTI-BADWORD (Checked before speed filter) ---
+        if (isGroup && userSettings.antiBadword === 'true' && !isOwner) {
+            const badWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප", "huththa", "pakaya", "ponnayo", "hukanno", "kariyo" , "kariya", "hukanna", "wezi", "hutta", "ponnaya", "balla"]; 
+            if (badWords.some(word => body.toLowerCase().includes(word))) {
+                const groupMetadata = await zanta.groupMetadata(from).catch(() => ({}));
+                const participants = groupMetadata.participants || [];
+                const isAdmins = participants.filter(p => p.admin !== null).map(p => p.id).includes(sender);
+                
+                if (!isAdmins) {
+                    await zanta.sendMessage(from, { delete: mek.key });
+                    await zanta.sendMessage(from, { text: `⚠️ *@${senderNumber} ඔබේ පණිවිඩය ඉවත් කරන ලදී!*`, mentions: [sender] });
+                    return; // Badword detected, stop processing to save RAM
+                }
+            }
+        }
+
+        // --- 🚀 3. SPEED FILTER (Ignore non-commands in groups) ---
+        if (isGroup && !isCmd && !isQuotedReply) return;
+
+        const m = sms(zanta, mek);
+        const commandName = isCmd ? body.slice(prefix.length).trim().split(" ")[0].toLowerCase() : "";
+        const args = body.trim().split(/ +/).slice(1);
 
         if (userSettings.autoRead === 'true') await zanta.readMessages([mek.key]);
         if (userSettings.autoTyping === 'true') await zanta.sendPresenceUpdate('composing', from);
@@ -207,16 +222,6 @@ async function connectToWA(sessionData) {
         const participants = isGroup ? groupMetadata.participants : [];
         const groupAdmins = isGroup ? participants.filter(p => p.admin !== null).map(p => p.id) : [];
         const isAdmins = isGroup ? groupAdmins.includes(sender) : false;
-
-        // 🛡️ ANTI-BADWORD (ඔයාගේ Original Feature එක)
-        if (isGroup && userSettings.antiBadword === 'true' && !isAdmins && !isOwner) {
-            const badWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප", "huththa", "pakaya", "ponnayo", "hukanno", "kariyo" , "kariya", "hukanna", "wezi", "hutta", "ponnaya", "balla"]; 
-            if (badWords.some(word => body.toLowerCase().includes(word))) {
-                await zanta.sendMessage(from, { delete: mek.key });
-                await zanta.sendMessage(from, { text: `⚠️ *@${senderNumber} ඔබේ පණිවිඩය ඉවත් කරන ලදී!*`, mentions: [sender] });
-                return;
-            }
-        }
 
         const reply = (text) => zanta.sendMessage(from, { text }, { quoted: mek });
         
