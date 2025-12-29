@@ -1,53 +1,58 @@
 const { cmd } = require("../command");
 const getFbVideoInfo = require("@xaviabot/fb-downloader");
-const config = require('../config');
 
 cmd({
     pattern: "fb",
     alias: ["facebook"],
     react: "📥",
-    desc: "Download Facebook Videos safely.",
+    desc: "Download Facebook Videos.",
     category: "download",
     filename: __filename,
-}, async (zanta, mek, m, { from, reply, q, userSettings }) => {
+}, async (zanta, mek, m, { from, reply, q }) => {
     try {
         if (!q) return reply("❤️ *කරුණාකර Facebook වීඩියෝ ලින්ක් එකක් ලබා දෙන්න.*");
 
-        const fbRegex = /(https?:\/\/)?(www\.)?(facebook|fb|fb\.watch)\/.+/;
+        const fbRegex = /(https?:\/\/)?(www\.)?(facebook|fb)\.com\/.+/;
         if (!fbRegex.test(q)) return reply("☹️ *ලින්ක් එක වැරදියි.*");
 
-        const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
-        const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
+        const currentBotName = global.CURRENT_BOT_SETTINGS.botName;
+        const loadingDesc = `╭━─━─━─━─━─━──━╮\n┃ *${currentBotName} FB Downloader*\n╰━─━─━─━─━─━──━╯\n\n⏳ *Waiting for download...*`;
 
-        // Loading message එක Text එකක් විදිහට යවමු (පසුව Edit කිරීමට පහසුයි)
-        const loading = await zanta.sendMessage(from, { text: "⏳ *FB වීඩියෝව පරීක්ෂා කරමින්...*" }, { quoted: mek });
+        // 1. මුලින්ම Logo එක සහ "Downloading" Caption එක සහිත පණිවිඩය යවයි
+        const sentMsg = await zanta.sendMessage(from, {
+            image: { url: "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/fb.jpg?raw=true" },
+            caption: loadingDesc,
+        }, { quoted: mek });
 
         const result = await getFbVideoInfo(q);
 
         if (!result || (!result.sd && !result.hd)) {
-            return await zanta.sendMessage(from, { text: "❌ *වීඩියෝව සොයාගත නොහැකි විය.*", edit: loading.key });
+            // අසාර්ථක වුවහොත් පණිවිඩය Edit කරයි
+            return await zanta.sendMessage(from, { 
+                text: "☹️ *Failed to download video. Please check the link.*", 
+                edit: sentMsg.key 
+            });
         }
 
-        const videoUrl = result.hd || result.sd;
+        const bestUrl = result.hd || result.sd;
         const quality = result.hd ? "HD" : "SD";
 
-        // 1. මුලින් විස්තර සහිත පින්තූරය යවමු
-        await zanta.sendMessage(from, {
-            image: { url: "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/fb.jpg?raw=true" },
-            caption: `*${botName} FB DOWNLOADER*\n\n✅ *Status:* Downloading...\n👻 *Quality:* ${quality}\n\n> *© ${botName}*`,
-        }, { quoted: mek });
+        // 2. බාගත කිරීම අවසන් වූ පසු එම Image එකේම Caption එක Edit කිරීම
+        const successDesc = `╭━─━─━─━─━─━──━╮\n┃ *${currentBotName} FB Downloader*\n╰━─━─━─━─━─━──━╯\n\n✅ *Status:* Download Completed!\n👻 *Quality:* ${quality}`;
 
-        // 2. වීඩියෝව Stream කරමු
-        await zanta.sendMessage(from, {
-            video: { url: videoUrl },
-            mimetype: "video/mp4",
-            caption: `*✅ Success! (${quality})*\n\n> *© ${botName}*`,
-        }, { quoted: mek });
+        await zanta.sendMessage(from, { 
+            text: successDesc, 
+            edit: sentMsg.key 
+        });
 
-        // 3. කලින් තිබුණු Loading මැසේජ් එක Edit කරමු
-        await zanta.sendMessage(from, { text: "✅ *බාගත කිරීම අවසන්!*", edit: loading.key });
+        // 3. වීඩියෝව යැවීම
+        await zanta.sendMessage(from, {
+            video: { url: bestUrl },
+            caption: `*📥 Quality: ${quality}*\n\n> *© ${currentBotName}*`,
+        }, { quoted: mek });
 
     } catch (e) {
+        console.error(e);
         reply(`❌ *Error:* ${e.message}`);
     }
 });
