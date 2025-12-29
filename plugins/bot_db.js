@@ -1,11 +1,10 @@
 const mongoose = require('mongoose');
 const config = require('../config');
 
-// 🚨 MongoDB URL එක Secrets හෝ Config වලින් ලබා ගැනීම
 const MONGO_URI = process.env.MONGODB_URL || process.env.MONGO_URI || config.MONGODB_URL; 
 
 const SettingsSchema = new mongoose.Schema({
-    id: { type: String, required: true, unique: true }, // මෙතනට සේව් වෙන්නේ පිරිසිදු නම්බර් එක පමණි
+    id: { type: String, required: true, unique: true },
     botName: { type: String, default: config.DEFAULT_BOT_NAME },
     ownerName: { type: String, default: config.DEFAULT_OWNER_NAME },
     prefix: { type: String, default: config.DEFAULT_PREFIX },
@@ -16,72 +15,74 @@ const SettingsSchema = new mongoose.Schema({
     readCmd: { type: String, default: 'false' },
     autoVoice: { type: String, default: 'false' },
     antiBadword: { type: String, default: 'false' },
-    antiDelete: { type: String, default: 'false' } // 🆕 අලුතින් එක් කළා
+    antiDelete: { type: String, default: 'false' }
 });
 
 const Settings = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);
 
-let isConnected = false;
+// --- [MEMORY CACHE] ---
+// හැමවෙලේම DB එකට යන එක නවත්වා RAM එකේ පොඩි cache එකක් තබා ගැනීම
+const settingsCache = new Map();
+const CACHE_TTL = 10 * 60 * 1000; // විනාඩි 10ක් Cache එක තබා ගනී
 
 async function connectDB() {
-    if (isConnected) return;
+    if (mongoose.connection.readyState === 1) return;
     try {
-        await mongoose.connect(MONGO_URI);
-        isConnected = true;
-        console.log("✅ MongoDB Settings Database Connected!");
+        await mongoose.connect(MONGO_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            maxPoolSize: 5 // Free Tier එකේදී connections ප්‍රමාණය සීමා කිරීම හොඳයි
+        });
+        console.log("✅ MongoDB Connected!");
     } catch (error) {
-        console.error("❌ MongoDB Error:", error);
+        // console.error ඉවත් කර සරලව තැබුවා
     }
 }
 
-// 🛠️ JID එකෙන් නම්බර් එක විතරක් වෙන් කරගන්නා Function එක
 const cleanId = (jid) => jid ? jid.split("@")[0].replace(/[^0-9]/g, "") : null;
 
 async function getBotSettings(userNumber) {
-    const defaults = { 
-        botName: config.DEFAULT_BOT_NAME, 
-        ownerName: config.DEFAULT_OWNER_NAME, 
-        prefix: config.DEFAULT_PREFIX,
-        autoRead: 'false',
-        autoTyping: 'false',
-        autoStatusSeen: 'true',
-        alwaysOnline: 'false',
-        readCmd: 'false',
-        autoVoice: 'false',
-        antiBadword: 'false',
-        antiDelete: 'false' // 🆕 අලුතින් එක් කළා
-    };
-
-    if (!userNumber) return defaults;
-
     const targetId = cleanId(userNumber);
-    if (!targetId) return defaults;
+    if (!targetId) return null;
+
+    // 1. මුලින් Cache එකේ තියෙනවාද බලන්න
+    if (settingsCache.has(targetId)) {
+        return settingsCache.get(targetId);
+    }
 
     try {
-        let settings = await Settings.findOne({ id: targetId });
+        let settings = await Settings.findOne({ id: targetId }).lean(); // .lean() පාවිච්චි කිරීමෙන් RAM එක ගොඩක් බේරේ
+        
         if (!settings) {
-            settings = await Settings.create({ id: targetId, ...defaults });
-            console.log(`[DB] Created clean profile for: ${targetId}`);
+            settings = await Settings.create({ id: targetId });
+            settings = settings.toObject();
         }
-        return settings.toObject(); 
+
+        // 2. Cache එකට දාන්න
+        settingsCache.set(targetId, settings);
+        setTimeout(() => settingsCache.delete(targetId), CACHE_TTL); // කාලයකට පසු cache එක අයින් කරන්න
+
+        return settings;
     } catch (e) {
-        console.error('[DB] Fetch Error:', e);
-        return defaults;
+        return null;
     }
 }
 
-// 🛠️ මේ Function එකේ UserNumber එක අනුව Update වෙන්න පොඩි වෙනසක් කළා
 async function updateSetting(userNumber, key, value) {
     try {
         const targetId = cleanId(userNumber);
         const result = await Settings.findOneAndUpdate(
             { id: targetId },
             { $set: { [key]: value } },
-            { new: true, upsert: true }
+            { new: true, upsert: true, lean: true }
         );
+
+        if (result) {
+            // 3. Update කරන විට Cache එකත් Update කරන්න
+            settingsCache.set(targetId, result);
+        }
         return !!result;
     } catch (e) {
-        console.error(`[DB] Update Error (${key}):`, e);
         return false;
     }
 }
