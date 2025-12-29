@@ -22,7 +22,7 @@ module.exports = {
     // මෙම අගයන් පළමු වතාවට Database එක සෑදීමේදී භාවිත වේ (Database & Dashboard Sync)
     AUTO_READ: process.env.AUTO_READ || "false",
     AUTO_TYPING: process.env.AUTO_TYPING || "false",
-    AUTO_STATUS_SEEN: process.env.AUTO_STATUS_SEEN || "true",
+    AUTO_STATUS_SEEN: process.env.AUTO_STATUS_SEEN || "false",
     ALWAYS_ONLINE: process.env.ALWAYS_ONLINE || "false",
     READ_CMD: process.env.READ_CMD || "false",
     AUTO_VOICE: process.env.AUTO_VOICE || "false",
