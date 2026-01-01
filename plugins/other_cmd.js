@@ -15,18 +15,43 @@ cmd({
     try {
         const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
         const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
-        const targetJid = m.quoted ? m.quoted.sender : sender;
+        
+        let targetJid;
+        let contextMsg = "";
 
-        let jidMsg = `🆔 *USER JID INFO*\n\n👤 *User:* @${targetJid.split('@')[0]}\n🎫 *JID:* ${targetJid}\n`;
-        if (isGroup) jidMsg += `🏢 *Group JID:* ${from}\n`;
+        // 1. මැසේජ් එකක් Quoted කරලා තිබේ නම්
+        if (m.quoted) {
+            // Forward කරපු මැසේජ් එකක් නම් (චැනල් JID එක මෙතන තියෙන්නේ)
+            if (m.quoted.contextInfo && m.quoted.contextInfo.forwardingScore > 0 && m.quoted.contextInfo.participant) {
+                targetJid = m.quoted.contextInfo.participant;
+                contextMsg = "📢 *Forwarded Source JID*";
+            } 
+            // එසේ නොවේ නම් සාමාන්‍ය Quoted User JID
+            else {
+                targetJid = m.quoted.sender;
+                contextMsg = "👤 *Quoted User JID*";
+            }
+        } 
+        // 2. කිසිවක් Quoted කර නැත්නම් මැසේජ් එක එවූ කෙනාගේ JID
+        else {
+            targetJid = sender;
+            contextMsg = "👤 *Your JID*";
+        }
+
+        let jidMsg = `🆔 *JID INFORMATION*\n\n`;
+        jidMsg += `${contextMsg}:\n🎫 \`${targetJid}\`\n`;
+        
+        if (isGroup) {
+            jidMsg += `\n🏢 *Current Group JID:*\n🎫 \`${from}\`\n`;
+        }
+
         jidMsg += `\n> *© ${botName}*`;
 
         await zanta.sendMessage(from, { text: jidMsg, mentions: [targetJid] }, { quoted: mek });
     } catch (err) {
-        // Log ඉවත් කර සරලව reply කළා
+        console.error(err);
     }
 });
-
 // 2. Speed Test
 cmd({
     pattern: "speed",
