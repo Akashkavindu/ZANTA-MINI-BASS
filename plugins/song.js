@@ -88,7 +88,7 @@ cmd({
 
 cmd({
     pattern: "csong",
-    desc: "Send song to channel/group/inbox",
+    desc: "Send song to channel/group/inbox with Debugging",
     category: "download",
     use: ".csong <jid> <song name>",
     filename: __filename
@@ -99,11 +99,15 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
         if (!q) return reply("⚠️ භාවිතා කරන ආකාරය: .csong <jid> <song_name>");
 
         const args = q.split(" ");
-        const targetJid = args[0]; 
+        const targetJid = args[0].trim(); 
         const songName = args.slice(1).join(" "); 
 
         const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
         const botName = settings.botName || "ZANTA-MD";
+
+        console.log(`[DEBUG] Attempting to send to: ${targetJid}`);
+        const isChannel = targetJid.endsWith("@newsletter");
+        console.log(`[DEBUG] Is Channel: ${isChannel}`);
 
         // 1. සින්දුව සෙවීම
         const yts = require("yt-search");
@@ -112,38 +116,51 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
         const data = search.videos[0];
         if (!data) return reply("❌ සින්දුව සොයාගත නොහැකි විය.");
 
-        // --- 🚀 CHANNEL STABILITY FIX ---
-        const isChannel = targetJid.endsWith("@newsletter");
-
         // 2. Image එක Caption එකත් එක්ක යැවීම
-        // චැනල් වලට යවනකොට 'newsletterJid' Property එක අනිවාර්යයි
-        await zanta.sendMessage(targetJid, { 
+        console.log(`[DEBUG] Sending image to ${targetJid}...`);
+        const imgMsg = await zanta.sendMessage(targetJid, { 
             image: { url: data.thumbnail }, 
             caption: `🎵 *${data.title}*\n⏳ *${data.timestamp}*\n\n> *© ${botName}*`
         }, { newsletterJid: isChannel ? targetJid : undefined });
 
+        if (imgMsg) console.log(`[DEBUG] Image sent successfully. ID: ${imgMsg.key.id}`);
+
         // 3. සින්දුව Download කිරීම
+        console.log(`[DEBUG] Downloading audio from: ${data.url}`);
         const songData = await ytmp3(data.url, "128");
         if (!songData || !songData.download || !songData.download.url) {
             return reply("❌ ඩවුන්ලෝඩ් ලින්ක් එක ලබා ගැනීමට නොහැක.");
         }
 
         // 4. Audio එක Music Player එකක් ලෙස යැවීම
-        // චැනල් වලට යවන විශේෂ ක්‍රමය මෙන්න
-        await zanta.sendMessage(targetJid, { 
+        console.log(`[DEBUG] Sending audio to ${targetJid}...`);
+        const audioMsg = await zanta.sendMessage(targetJid, { 
             audio: { url: songData.download.url }, 
             mimetype: 'audio/mpeg', 
-            ptt: false, // Music player එකක් ලෙස පෙන්වීමට
-            fileName: `${data.title}.mp3`
+            ptt: false,
+            fileName: `${data.title}.mp3`,
+            contextInfo: {
+                // චැනල් වලට මැසේජ් එක push කිරීමට මෙය උපකාරී විය හැක
+                forwardingScore: 1,
+                isForwarded: false
+            }
         }, { 
             newsletterJid: isChannel ? targetJid : undefined,
-            quoted: null // චැනල් වලට Quoted මැසේජ් යැවිය නොහැක, එය null කළ යුතුය
+            quoted: null // චැනල් වලට Quote කිරීම අකැපයි
         });
 
-        await reply(`✅ Successfully sent to: ${targetJid}`);
+        if (audioMsg) {
+            console.log(`[DEBUG] Audio sent successfully. ID: ${audioMsg.key.id}`);
+            await reply(`✅ Successfully sent to: ${targetJid}`);
+        } else {
+            console.log(`[DEBUG] Audio failed to send to ${targetJid}`);
+            await reply("❌ Audio එක යැවීමට නොහැකි විය.");
+        }
 
     } catch (e) {
-        console.error("CHANNEL SEND ERROR:", e);
+        console.error("--- CHANNEL SEND ERROR LOG ---");
+        console.error(e);
+        console.error("------------------------------");
         reply(`❌ Error: ${e.message}`);
     }
 });
