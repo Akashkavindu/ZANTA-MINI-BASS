@@ -87,97 +87,36 @@ cmd({
 });
 
 cmd({
-    pattern: "csong",
-    desc: "Send song to channel/group/inbox (100% Fixed)",
-    category: "download",
-    use: ".csong <jid> <song name>",
+    pattern: "ctest",
+    desc: "Test simple text message to channel",
+    category: "test",
+    use: ".ctest <jid>",
     filename: __filename
 },
-async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
+async (zanta, mek, m, { from, q, reply, isOwner }) => {
     try {
-        if (!isOwner) return reply("❌ මෙම කමාන්ඩ් එක භාවිතා කළ හැක්කේ බොට් අයිතිකරුට පමණි.");
-        if (!q) return reply("⚠️ භාවිතා කරන ආකාරය: .csong <jid> <song_name>");
+        if (!isOwner) return reply("❌ Owner Only.");
+        if (!q) return reply("⚠️ JID එක දෙන්න.");
 
-        const args = q.split(" ");
-        const targetJid = args[0].trim(); 
-        const songName = args.slice(1).join(" "); 
-
-        const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
-        const botName = settings.botName || "ZANTA-MD";
-
-        console.log(`\n--- [START EXTREME DEBUG] ---`);
-        console.log(`[TARGET]: ${targetJid}`);
+        const targetJid = q.trim();
         const isChannel = targetJid.endsWith("@newsletter");
-        console.log(`[TYPE]: ${isChannel ? "CHANNEL (NEWSLETTER)" : "NORMAL CHAT"}`);
 
-        // 1. සින්දුව සෙවීම
-        const yts = require("yt-search");
-        const { ytmp3 } = require("@vreden/youtube_scraper");
-        const search = await yts(songName);
-        const data = search.videos[0];
-        if (!data) return reply("❌ සින්දුව සොයාගත නොහැකි විය.");
+        console.log(`\n--- [TEXT TEST START] ---`);
+        console.log(`[TARGET]: ${targetJid}`);
 
-        // 2. Image එක Caption එකත් එක්ක යැවීම (NEWSLETTER FIXED)
-        console.log(`[ACTION]: Sending Thumbnail...`);
-        const imgResult = await zanta.sendMessage(targetJid, { 
-            image: { url: data.thumbnail }, 
-            caption: `🎵 *${data.title}*\n⏳ *${data.timestamp}*\n\n> *© ${botName}*`,
-            viewOnce: false // චැනල් වලට මේක false තිබිය යුතුයි
+        const sentMsg = await zanta.sendMessage(targetJid, { 
+            text: `👋 Hello! This is a test message from ZANTA-MD to this channel.\n\nTime: ${new Date().toLocaleString()}` 
         }, { 
-            newsletterJid: isChannel ? targetJid : undefined,
-            broadcast: isChannel ? true : undefined 
+            newsletterJid: isChannel ? targetJid : undefined 
         });
 
-        console.log(`[RESULT]: Image ID: ${imgResult?.key?.id || "FAILED"}`);
-
-        // 3. සින්දුව Download කිරීම
-        const songData = await ytmp3(data.url, "128");
-        if (!songData || !songData.download || !songData.download.url) {
-            return reply("❌ ඩවුන්ලෝඩ් ලින්ක් එක ලබා ගැනීමට නොහැක.");
-        }
-
-        // 4. Audio එක Music Player එකක් ලෙස යැවීම (NEWSLETTER FIXED)
-        console.log(`[ACTION]: Sending Audio...`);
-        const audioResult = await zanta.sendMessage(targetJid, { 
-            audio: { url: songData.download.url }, 
-            mimetype: 'audio/mpeg', 
-            ptt: false,
-            fileName: `${data.title}.mp3`,
-            contextInfo: {
-                // Newsletter එකට අදාළ විශේෂ Metadata
-                forwardedNewsletterMessageInfo: isChannel ? {
-                    newsletterJid: targetJid,
-                    serverMessageId: 1,
-                    newsletterName: botName
-                } : undefined,
-                externalAdReply: {
-                    title: data.title,
-                    body: botName,
-                    mediaType: 2,
-                    thumbnailUrl: data.thumbnail,
-                    sourceUrl: data.url,
-                    showAdAttribution: true
-                }
-            }
-        }, { 
-            newsletterJid: isChannel ? targetJid : undefined,
-            broadcast: isChannel ? true : undefined,
-            quoted: null 
-        });
-
-        if (audioResult) {
-            console.log(`[RESULT]: Audio ID: ${audioResult.key.id}`);
-            console.log(`--- [END DEBUG: SUCCESS] ---\n`);
-            await reply(`✅ Successfully pushed to: ${targetJid}`);
-        } else {
-            console.log(`[RESULT]: Audio sending failed.`);
-            await reply("❌ Audio එක යැවීමට නොහැකි විය.");
+        if (sentMsg) {
+            console.log(`[RESULT]: Text Sent! ID: ${sentMsg.key.id}`);
+            await reply(`✅ Text message sent successfully to: ${targetJid}`);
         }
 
     } catch (e) {
-        console.error(`\n--- [DEBUG ERROR LOG] ---`);
         console.error(e);
-        console.error(`--- [END DEBUG ERROR] ---\n`);
-        reply(`❌ Error: ${e.message}`);
+        reply(`❌ Test Failed: ${e.message}`);
     }
 });
