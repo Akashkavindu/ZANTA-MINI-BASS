@@ -169,17 +169,24 @@ async function connectToWA(sessionData) {
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
 
         // --- 🛡️ ANTI-BADWORD ---
-        if (isGroup && userSettings.antiBadword === 'true' && !isOwner) {
-            const badWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප", "huththa", "pakaya", "ponnayo", "hukanno", "kariyo" , "kariya", "hukanna", "wezi", "hutta", "ponnaya", "balla"]; 
-            if (badWords.some(word => body.toLowerCase().includes(word))) {
-                const groupMetadata = await zanta.groupMetadata(from).catch(() => ({}));
-                const participants = groupMetadata.participants || [];
-                const isAdmins = participants.filter(p => p.admin !== null).map(p => p.id).includes(sender);
-                
-                if (!isAdmins) {
+        if (isGroup && !isOwner) {
+            const badWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප", "huththa", "pakaya", "ponnayo", "hukanno", "kariyo" , "kariya", "hukanna", "wezi", "hutta", "ponnaya", "balla"];
+            const isBadWord = userSettings.antiBadword === 'true' && badWords.some(word => body.toLowerCase().includes(word));
+            const isLink = userSettings.antiLink === 'true' && body.includes("chat.whatsapp.com/");
+
+            if (isBadWord || isLink) {
+                const gMetadata = await zanta.groupMetadata(from).catch(() => ({}));
+                const gParticipants = gMetadata.participants || [];
+                const isSenderAdmin = gParticipants.filter(p => p.admin !== null).map(p => p.id).includes(sender);
+
+                if (!isSenderAdmin) {
                     await zanta.sendMessage(from, { delete: mek.key });
-                    await zanta.sendMessage(from, { text: `⚠️ *@${senderNumber} ඔබේ පණිවිඩය ඉවත් කරන ලදී!*`, mentions: [sender] });
-                    return; 
+                    if (isBadWord) {
+                        await zanta.sendMessage(from, { text: `⚠️ *@${senderNumber} නරක වචන භාවිතය තහනම්!*`, mentions: [sender] });
+                    } else {
+                        await zanta.sendMessage(from, { text: `⚠️ *@${senderNumber} ගෲප් ලින්ක් භාවිතය තහනම්!*`, mentions: [sender] });
+                    }
+                    return; // මෙතනින් නවතින නිසා Speed Filter එකට යන්නේ නැහැ
                 }
             }
         }
