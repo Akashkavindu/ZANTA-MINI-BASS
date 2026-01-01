@@ -33,8 +33,6 @@ const SessionSchema = new mongoose.Schema({
 }, { collection: 'sessions' });
 const Session = mongoose.models.Session || mongoose.model("Session", SessionSchema);
 
-// (Anti-Delete TempMsg Schema එක අයින් කරන ලදී)
-
 const decodeJid = (jid) => {
     if (!jid) return jid;
     if (/:\d+@/gi.test(jid)) {
@@ -75,15 +73,24 @@ async function loadPlugins() {
     console.log(`✨ Loaded: ${commands.length} Commands`);
 }
 
+// --- 🚀 IMPROVED BATCH START SYSTEM ---
 async function startSystem() {
     await connectDB(); 
     await loadPlugins();
 
     const allSessions = await Session.find({});
-    console.log(`📂 Connecting ${allSessions.length} sessions...`);
+    console.log(`📂 Total sessions: ${allSessions.length}. Connecting in batches...`);
 
-    for (let sessionData of allSessions) {
-        await connectToWA(sessionData);
+    const BATCH_SIZE = 5; // එකවර ලොග් වන ගණන
+    const DELAY_BETWEEN_BATCHES = 10000; // බැච් එකක් අතර පරතරය තත්පර 10
+
+    for (let i = 0; i < allSessions.length; i += BATCH_SIZE) {
+        const batch = allSessions.slice(i, i + BATCH_SIZE);
+        
+        setTimeout(async () => {
+            console.log(`🚀 Starting Batch (${i + 1} to ${Math.min(i + BATCH_SIZE, allSessions.length)})...`);
+            batch.forEach(sessionData => connectToWA(sessionData));
+        }, (i / BATCH_SIZE) * DELAY_BETWEEN_BATCHES);
     }
 
     Session.watch().on('change', async (data) => {
@@ -125,13 +132,18 @@ async function connectToWA(sessionData) {
         const { connection, lastDisconnect } = update;
         if (connection === "close") {
             const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason === DisconnectReason.loggedOut) {
+            const errorMsg = lastDisconnect?.error?.message || "";
+
+            // --- 🛡️ AUTO-REMOVE CORRUPTED SESSIONS ---
+            if (reason === DisconnectReason.loggedOut || errorMsg.includes("Bad MAC") || errorMsg.includes("Encryption")) {
+                console.log(`❌ [${userNumber}] Session Error (Bad MAC/Logout). Removing from DB...`);
                 await Session.deleteOne({ number: sessionData.number });
             } else {
-                connectToWA(sessionData);
+                // සාමාන්‍ය Drop එකක් නම් පමණක් නැවත ලොග් වීමට උත්සාහ කරයි
+                setTimeout(() => connectToWA(sessionData), 5000);
             }
         } else if (connection === "open") {
-            console.log(`✅ [${userNumber}] Connected`);
+            console.log(`✅ [${userNumber}] Connected Successfully`);
             const ownerJid = decodeJid(zanta.user.id);
             await zanta.sendMessage(ownerJid, {
                 image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/alive-new.jpg?raw=true` },
@@ -154,8 +166,6 @@ async function connectToWA(sessionData) {
         const isCmd = body.startsWith(prefix);
         const isQuotedReply = mek.message[type]?.contextInfo?.quotedMessage;
 
-        // --- (Anti-Delete Logic අයින් කරන ලදී) ---
-
         if (userSettings.autoStatusSeen === 'true' && from === "status@broadcast") {
             await zanta.readMessages([mek.key]);
             return;
@@ -168,7 +178,6 @@ async function connectToWA(sessionData) {
         const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
 
-        // --- 🛡️ ANTI-BADWORD ---
         if (isGroup && !isOwner) {
             const badWords = ["fuck", "sex", "porn", "හුකන", "පොන්න", "පුක", "බැල්ලි", "කුණුහරුප", "huththa", "pakaya", "ponnayo", "hukanno", "kariyo" , "kariya", "hukanna", "wezi", "hutta", "ponnaya", "balla"];
             const isBadWord = userSettings.antiBadword === 'true' && badWords.some(word => body.toLowerCase().includes(word));
@@ -186,12 +195,11 @@ async function connectToWA(sessionData) {
                     } else {
                         await zanta.sendMessage(from, { text: `⚠️ *@${senderNumber} ගෲප් ලින්ක් භාවිතය තහනම්!*`, mentions: [sender] });
                     }
-                    return; // මෙතනින් නවතින නිසා Speed Filter එකට යන්නේ නැහැ
+                    return;
                 }
             }
         }
 
-        // --- 🚀 SPEED FILTER ---
         if (isGroup && !isCmd && !isQuotedReply) return;
 
         const m = sms(zanta, mek);
@@ -209,14 +217,11 @@ async function connectToWA(sessionData) {
 
         const reply = (text) => zanta.sendMessage(from, { text }, { quoted: mek });
         
-        // --- 🔎 YTS REPLY LOGIC ---
         if (m.quoted && ytsLinks && ytsLinks.has(m.quoted.id)) {
             const selection = parseInt(m.body.trim());
             const links = ytsLinks.get(m.quoted.id);
             if (!isNaN(selection) && selection <= links.length) {
                 const video = links[selection - 1];
-                
-                // RAM Protection (15 mins limit)
                 if (video.seconds > 900) return reply("⚠️ විනාඩි 15කට වඩා වැඩි වීඩියෝ බාගත කළ නොහැක.");
                 
                 await m.react("📥");
@@ -243,7 +248,6 @@ async function connectToWA(sessionData) {
             }
         }
 
-        // --- ⚙️ SETTINGS REPLY LOGIC ---
         const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
         if (isSettingsReply && body && !isCmd && isOwner) {
             const input = body.trim().split(" ");
@@ -258,7 +262,6 @@ async function connectToWA(sessionData) {
             }
         }
 
-        // --- COMMAND HANDLER ---
         const isMenuReply = (m.quoted && lastMenuMessage && lastMenuMessage.get(from) === m.quoted.id);
         const isHelpReply = (m.quoted && lastHelpMessage && lastHelpMessage.get(from) === m.quoted.id);
 
@@ -286,10 +289,11 @@ startSystem();
 app.get("/", (req, res) => res.send("ZANTA-MD Online ✅"));
 app.listen(port);
 
-const MINUTES = 40; // විනාඩි ගණන මෙතැනින් වෙනස් කළ හැක
+// --- ♻️ STABILITY RESTART (EVERY 60 MINS) ---
+const MINUTES = 60; 
 const RESTART_INTERVAL = MINUTES * 60 * 1000; 
 
 setTimeout(() => {
-    console.log(`♻️ [RAM CONTROL] විනාඩි ${MINUTES} සම්පූර්ණයි. බොට් නැවත පණගන්වමින් පවතී...`);
+    console.log(`♻️ [STABILITY] Restarting server to clear cache...`);
     process.exit(0); 
 }, RESTART_INTERVAL);
