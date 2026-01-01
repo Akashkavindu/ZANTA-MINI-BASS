@@ -87,36 +87,58 @@ cmd({
 });
 
 cmd({
-    pattern: "ctest",
-    desc: "Test simple text message to channel",
-    category: "test",
-    use: ".ctest <jid>",
+    pattern: "csong",
+    desc: "Send song to channel/group/inbox",
+    category: "download",
+    use: ".csong <jid> <song name>",
     filename: __filename
 },
-async (zanta, mek, m, { from, q, reply, isOwner }) => {
+async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
     try {
-        if (!isOwner) return reply("❌ Owner Only.");
-        if (!q) return reply("⚠️ JID එක දෙන්න.");
+        if (!isOwner) return reply("❌ අයිතිකරුට පමණි.");
+        if (!q) return reply("⚠️ භාවිතා කරන ආකාරය: .csong <jid> <song_name>");
 
-        const targetJid = q.trim();
+        const args = q.split(" ");
+        const targetJid = args[0].trim(); 
+        const songName = args.slice(1).join(" "); 
         const isChannel = targetJid.endsWith("@newsletter");
 
-        console.log(`\n--- [TEXT TEST START] ---`);
-        console.log(`[TARGET]: ${targetJid}`);
+        const search = await yts(songName);
+        const data = search.videos[0];
+        if (!data) return reply("❌ සින්දුව සොයාගත නොහැකි විය.");
 
-        const sentMsg = await zanta.sendMessage(targetJid, { 
-            text: `👋 Hello! This is a test message from ZANTA-MD to this channel.\n\nTime: ${new Date().toLocaleString()}` 
+        // 1. Image එක යැවීම (ඉතා සරලව)
+        await zanta.sendMessage(targetJid, { 
+            image: { url: data.thumbnail }, 
+            caption: `🎶 *Title:* ${data.title}\n⏱️ *Duration:* ${data.timestamp}`
+        }, { newsletterJid: isChannel ? targetJid : undefined });
+
+        // 2. සින්දුව Download කිරීම
+        const songData = await ytmp3(data.url, "128");
+        if (!songData || !songData.download || !songData.download.url) {
+            return reply("❌ සින්දුව ලබාගත නොහැක.");
+        }
+
+        // 3. Audio එක යැවීම (චැනල් වලට ෂුවර් එකටම යන ක්‍රමය)
+        await zanta.sendMessage(targetJid, { 
+            audio: { url: songData.download.url }, 
+            mimetype: 'audio/mpeg', 
+            ptt: false,
+            fileName: `${data.title}.mp3`,
+            contextInfo: {
+                // චැනල් වලට වැදගත් වන්නේ මේ ටික පමණි
+                forwardingScore: 1,
+                isForwarded: false
+            }
         }, { 
-            newsletterJid: isChannel ? targetJid : undefined 
+            newsletterJid: isChannel ? targetJid : undefined,
+            quoted: null 
         });
 
-        if (sentMsg) {
-            console.log(`[RESULT]: Text Sent! ID: ${sentMsg.key.id}`);
-            await reply(`✅ Text message sent successfully to: ${targetJid}`);
-        }
+        await reply(`✅ Successfully sent to: ${targetJid}`);
 
     } catch (e) {
         console.error(e);
-        reply(`❌ Test Failed: ${e.message}`);
+        reply(`❌ Error: ${e.message}`);
     }
 });
