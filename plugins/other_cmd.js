@@ -22,32 +22,35 @@ cmd({
         // 1. මැසේජ් එකක් Quoted කරලා තිබේ නම්
         if (m.quoted) {
             // Forward කරපු මැසේජ් එකක් නම් (චැනල් JID එක මෙතන තියෙන්නේ)
-            if (m.quoted.contextInfo && m.quoted.contextInfo.forwardingScore > 0 && m.quoted.contextInfo.participant) {
-                targetJid = m.quoted.contextInfo.participant;
+            if (m.quoted.contextInfo && m.quoted.contextInfo.forwardingScore > 0) {
+                // මෙතනදී newsletter/channel JID එක ගන්නේ මෙහෙමයි
+                targetJid = m.quoted.contextInfo.remoteJid || m.quoted.contextInfo.participant;
                 contextMsg = "📢 *Forwarded Source JID*";
             } 
-            // එසේ නොවේ නම් සාමාන්‍ය Quoted User JID
+            // එසේ නොවේ නම් සාමාන්්‍ය Quoted User JID
             else {
                 targetJid = m.quoted.sender;
                 contextMsg = "👤 *Quoted User JID*";
             }
         } 
-        // 2. කිසිවක් Quoted කර නැත්නම් මැසේජ් එක එවූ කෙනාගේ JID
+        // 2. කිසිවක් Quoted කර නැත්නම් මැසේජ් එක එවූ Chat එකේ JID
         else {
-            targetJid = sender;
-            contextMsg = "👤 *Your JID*";
+            // මෙන්න මෙතන තමයි වෙනස් කළේ: 'sender' වෙනුවට 'from' පාවිච්චි කළා
+            targetJid = from;
+            contextMsg = isGroup ? "🏢 *Current Group JID*" : "👤 *Current Chat JID*";
         }
 
         let jidMsg = `🆔 *JID INFORMATION*\n\n`;
         jidMsg += `${contextMsg}:\n🎫 \`${targetJid}\`\n`;
         
-        if (isGroup) {
-            jidMsg += `\n🏢 *Current Group JID:*\n🎫 \`${from}\`\n`;
+        // Sender ගේ JID එකත් අමතරව ඕන නම් මෙහෙම දාන්න පුළුවන්
+        if (isGroup || m.quoted) {
+            jidMsg += `\n👤 *Your JID:*\n🎫 \`${sender}\`\n`;
         }
 
         jidMsg += `\n> *© ${botName}*`;
 
-        await zanta.sendMessage(from, { text: jidMsg, mentions: [targetJid] }, { quoted: mek });
+        await zanta.sendMessage(from, { text: jidMsg, mentions: [sender, targetJid] }, { quoted: mek });
     } catch (err) {
         console.error(err);
     }
