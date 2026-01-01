@@ -295,7 +295,7 @@ app.get("/", (req, res) => res.send("ZANTA-MD Online ✅"));
 app.listen(port);
 
 // --- ♻️ STABILITY RESTART (EVERY 60 MINS) ---
-const MINUTES = 60; 
+const MINUTES = 90; 
 const RESTART_INTERVAL = MINUTES * 60 * 1000; 
 
 setTimeout(() => {
