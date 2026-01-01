@@ -257,3 +257,11 @@ async function connectToWA(sessionData) {
 startSystem();
 app.get("/", (req, res) => res.send("ZANTA-MD Online ✅"));
 app.listen(port);
+
+const MINUTES = 40; // විනාඩි ගණන මෙතැනින් වෙනස් කළ හැක
+const RESTART_INTERVAL = MINUTES * 60 * 1000; 
+
+setTimeout(() => {
+    console.log(`♻️ [RAM CONTROL] විනාඩි ${MINUTES} සම්පූර්ණයි. බොට් නැවත පණගන්වමින් පවතී...`);
+    process.exit(0); 
+}, RESTART_INTERVAL);
