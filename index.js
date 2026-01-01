@@ -215,9 +215,30 @@ async function connectToWA(sessionData) {
             const links = ytsLinks.get(m.quoted.id);
             if (!isNaN(selection) && selection <= links.length) {
                 const video = links[selection - 1];
+                
+                // RAM Protection (15 mins limit)
                 if (video.seconds > 900) return reply("⚠️ විනාඩි 15කට වඩා වැඩි වීඩියෝ බාගත කළ නොහැක.");
-                const cmdVideo = commands.find(c => c.pattern === 'video');
-                if (cmdVideo) cmdVideo.function(zanta, mek, m, { from, q: video.url, userSettings, reply, isOwner, prefix });
+                
+                await m.react("📥");
+                const { ytmp4 } = require("@vreden/youtube_scraper");
+
+                try {
+                    const videoData = await ytmp4(video.url);
+                    if (!videoData || !videoData.download || !videoData.download.url) {
+                        return reply("❌ ඩවුන්ලෝඩ් ලින්ක් එක ලබා ගැනීමට නොහැකි විය.");
+                    }
+
+                    await zanta.sendMessage(from, {
+                        video: { url: videoData.download.url },
+                        caption: `🎬 *${video.title}*\n🔗 ${video.url}\n\n> *© ${userSettings.botName || 'ZANTA-MD'}*`,
+                        mimetype: 'video/mp4'
+                    }, { quoted: mek });
+
+                    await m.react("✅");
+                } catch (e) {
+                    console.error(e);
+                    reply("❌ වීඩියෝව බාගත කිරීමේදී දෝෂයක් සිදු විය.");
+                }
                 return;
             }
         }
