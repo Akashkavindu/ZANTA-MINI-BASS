@@ -85,3 +85,69 @@ cmd({
         reply(`❌ *Error:* ${e.message}`);
     }
 });
+
+cmd({
+    pattern: "csong",
+    desc: "Send song to channel",
+    category: "download",
+    use: ".csong <jid> <song name>",
+    filename: __filename
+},
+async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
+    try {
+        if (!isOwner) return reply("❌ මෙම කමාන්ඩ් එක භාවිතා කළ හැක්කේ බොට් අයිතිකරුට පමණි.");
+        if (!q) return reply("⚠️ භාවිතා කරන ආකාරය: .csong <jid> <song_name>");
+
+        const args = q.split(" ");
+        const targetJid = args[0]; 
+        const songName = args.slice(1).join(" "); 
+
+        if (!targetJid.includes("@") || !songName) {
+            return reply("⚠️ කරුණාකර නිවැරදි JID එකක් සහ සින්දුවේ නමක් ලබා දෙන්න.");
+        }
+
+        const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
+        const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
+
+        // 1. සින්දුව සෙවීම
+        const search = await yts(songName);
+        const data = search.videos[0];
+        if (!data) return reply("❌ සින්දුව සොයාගත නොහැකි විය.");
+
+        // 2. Music Player Style Caption එක (ඔයා එවපු Image එකේ විදිහට)
+        let playerCaption = `📄 TITLE : ${data.title} ⏳ ❤️ 🎧
+
+.ilililililiililililililiililililililiilililil.
+
+01:24━━━━🔘━━━━━━━${data.timestamp}
+     ↻     ◁   II   ▷     ↺
+
+|  ${botName.toUpperCase()} MUSIC ❤️ 🎧`;
+
+        // 3. මුලින්ම Image එක සහ Caption එක Target JID එකට යැවීම
+        await zanta.sendMessage(targetJid, { 
+            image: { url: data.thumbnail }, 
+            caption: playerCaption 
+        });
+
+        // 4. සින්දුව Download කිරීම
+        const songData = await ytmp3(data.url, "192");
+        if (!songData || !songData.download || !songData.download.url) {
+            return reply("❌ ඩවුන්ලෝඩ් ලින්ක් එක ලබා ගැනීමට නොහැක.");
+        }
+
+        // 5. Audio එක සෙන්ඩ් කිරීම (Document එකක් ලෙස channel වලට වඩාත් සුදුසුයි)
+        await zanta.sendMessage(targetJid, { 
+            document: { url: songData.download.url }, 
+            mimetype: 'audio/mpeg', 
+            fileName: `${data.title}.mp3`,
+            caption: `🎵 *${data.title}*\n> *© ${botName}*`
+        });
+
+        await reply(`✅ Successfully sent to channel: ${targetJid}`);
+
+    } catch (e) {
+        console.error(e);
+        reply(`❌ Error: ${e.message}`);
+    }
+});
