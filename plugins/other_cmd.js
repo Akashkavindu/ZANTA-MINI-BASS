@@ -68,14 +68,27 @@ cmd({
         const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
         const startTime = Date.now();
 
+        // මුලින්ම පණිවිඩය යවයි
         const pinger = await zanta.sendMessage(from, { text: "🚀 *Checking...*" }, { quoted: mek });
         const ping = Date.now() - startTime;
 
+        // Edit කරන මැසේජ් එකට Channel Context එක එකතු කිරීම
         await zanta.sendMessage(from, { 
             text: `⚡ *${botName} SPEED*\n\n🚄 *Latency:* ${ping}ms\n📡 *Status:* Online\n\n> *© ${botName}*`, 
-            edit: pinger.key 
+            edit: pinger.key,
+            contextInfo: {
+                forwardingScore: 999,
+                isForwarded: true,
+                forwardedNewsletterMessageInfo: {
+                    newsletterJid: '120363404058637485@newsletter', // 👈 මෙතනට ඔයාගේ Channel JID එක දාන්න
+                    newsletterName: 'ZANTA-MD BOT OFFICIAL', // 👈 මෙතනට චැනල් එකේ නම දාන්න
+                    serverMessageId: 143
+                }
+            }
         });
-    } catch (err) {}
+    } catch (err) {
+        console.error(err);
+    }
 });
 
 // 3. Image Downloader (GIS)
