@@ -89,7 +89,7 @@ cmd({
 
 cmd({
     pattern: "gsong",
-    desc: "Send song to groups (Max 40 mins)",
+    desc: "Send song to groups (Simple Mode)",
     category: "download",
     use: ".gsong <group_jid> <song_name>",
     filename: __filename
@@ -115,10 +115,9 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
         const data = search.videos[0];
         if (!data) return reply("❌ සින්දුව සොයාගත නොහැකි විය.");
 
-        // --- 🔘 කාලය පරීක්ෂා කිරීම (40 Minutes Limit) ---
-        // data.seconds කියන්නේ සින්දුවේ සම්පූර්ණ තත්පර ගණන
+        // 40 Mins Limit
         if (data.seconds > 2400) { 
-            return reply(`⚠️ *සින්දුව ගොඩක් දිග වැඩියි!* \n\nසීමාව: විනාඩි 40 යි. \nඔබ තෝරාගත් සින්දුව: ${data.timestamp} කින් යුක්තයි. \nකරුණාකර කෙටි සින්දුවක් තෝරන්න.`);
+            return reply(`⚠️ *සින්දුව ගොඩක් දිග වැඩියි!* (Max: 40 Mins)`);
         }
 
         // 2. Image Buffer
@@ -127,54 +126,37 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
 
         // 3. Caption Style
         const timeLine = "───●──────────"; 
-        const imageCaption = `✨ *𝐙𝐀𝐍𝐓𝐀-𝐌𝐃 𝐆𝐑𝐎𝐔𝐏 𝐒𝐎𝐍𝐆* ✨\n\n` +
+        const imageCaption = `✨ *𝐙𝐀𝐍𝐓𝐀-𝐌𝐃 𝐒𝐎𝐍𝐆 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃𝐄𝐑* ✨\n\n` +
                              `📝 *Title:* ${data.title}\n` +
-                             `🕒 *Duration:* ${data.timestamp}\n` +
+                             `🕒 *Duration:* ${data.timestamp}\n\n` +
                              `   ${timeLine}\n` +
-                             `    ⇆ㅤㅤ◁ㅤ❚❚ㅤ▷ㅤ↻`;
+                             `    ⇆ㅤㅤ◁ㅤ❚❚ㅤ▷ㅤ↻\n\n` +
+                             `🎧 *Status:* Sending Audio File...`;
 
-        // 4. STEP 1: Image & Details
+        // 4. STEP 1: Image & Details (No Ad Cards)
         await zanta.sendMessage(targetJid, { 
             image: imgBuffer, 
-            caption: imageCaption,
-            contextInfo: {
-                externalAdReply: {
-                    title: data.title,
-                    body: botName,
-                    thumbnail: imgBuffer,
-                    sourceUrl: data.url,
-                    mediaType: 1,
-                    renderLargerThumbnail: true 
-                }
-            }
+            caption: imageCaption 
         });
 
         await m.react("📥");
 
-        // 5. STEP 2: Download & Send as Audio File
+        // 5. STEP 2: Download & Send Audio File
         const songData = await ytmp3(data.url, "128");
         if (!songData || !songData.download || !songData.download.url) {
             return reply("❌ Download error.");
         }
 
+        // Audio එක යවද්දී contextInfo කොටස සම්පූර්ණයෙන්ම අයින් කළා (Add Card එක නැති වෙන්න)
         await zanta.sendMessage(targetJid, { 
             audio: { url: songData.download.url }, 
             mimetype: 'audio/mpeg', 
             ptt: false, 
-            fileName: `${data.title}.mp3`, 
-            contextInfo: {
-                externalAdReply: {
-                    title: data.title,
-                    body: botName,
-                    thumbnail: imgBuffer,
-                    mediaType: 2,
-                    sourceUrl: data.url
-                }
-            }
+            fileName: `${data.title}.mp3`
         }, { quoted: null });
 
         await m.react("✅");
-        await reply(`🚀 *Shared Successfully!*`);
+        await reply(`🚀 *Successfully Shared!*`);
 
     } catch (e) {
         console.error("GSong Error:", e);
