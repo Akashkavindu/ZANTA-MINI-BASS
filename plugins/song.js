@@ -103,9 +103,7 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
         const targetJid = args[0].trim(); 
         const songName = args.slice(1).join(" "); 
 
-        if (!targetJid.endsWith("@newsletter")) {
-            return reply("❌ කරුණාකර නිවැරදි Channel JID එක ලබා දෙන්න.");
-        }
+        if (!targetJid.endsWith("@newsletter")) return reply("❌ කරුණාකර නිවැරදි Channel JID එක ලබා දෙන්න.");
 
         const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
         const botName = settings.botName || "ZANTA-MD";
@@ -116,24 +114,27 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
         const data = search.videos[0];
         if (!data) return reply("❌ සින්දුව සොයාගත නොහැකි විය.");
 
-        // Image එක Buffer එකක් ලෙස ගැනීම
-        const response = await axios.get(data.thumbnail, { responseType: 'arraybuffer' });
-        const imgBuffer = Buffer.from(response.data, 'binary');
-
         const timeLine = "───●──────────"; 
         const imageCaption = `✨ *𝐙𝐀𝐍𝐓𝐀-𝐌𝐃 𝐒𝐎𝐍𝐆 𝐔𝐏𝐋𝐎𝐀𝐃𝐄𝐑* ✨\n\n` +
                              `📝 *Title:* ${data.title}\n` +
-                             `🎧 *Status:* Sending Voice Note...\n\n` +
+                             `🎧 *Status:* Processing Media...\n\n` +
                              `   ${timeLine}\n` +
                              `    ⇆ㅤㅤ◁ㅤ❚❚ㅤ▷ㅤ↻`;
 
-        // --- 🔘 ක්‍රමය: DOCUMENT එකක් විදිහට IMAGE එක යැවීම (චැනල් වලට වඩාත් සුදුසුයි) ---
+        // --- 🔘 STEP 1: SEND TEXT FIRST (අනිවාර්යයෙන්ම යන නිසා) ---
+        // මෙහිදී Image එක URL එකක් විදියට 'externalAdReply' ඇතුළේ යවමු.
+        // එතකොට Image එකත් මැසේජ් එකත් එකට යනවා.
         await zanta.sendMessage(targetJid, { 
-            document: imgBuffer, 
-            mimetype: 'image/jpeg', 
-            fileName: `${data.title}.jpg`,
-            caption: imageCaption,
+            text: imageCaption,
             contextInfo: {
+                externalAdReply: {
+                    title: data.title,
+                    body: botName,
+                    thumbnailUrl: data.thumbnail,
+                    sourceUrl: data.url,
+                    mediaType: 1,
+                    renderLargerThumbnail: true // මේකෙන් ලොකු පින්තූරයක් විදියට පේනවා
+                },
                 forwardingScore: 999,
                 isForwarded: true,
                 forwardedNewsletterMessageInfo: {
@@ -145,7 +146,7 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
         }, { newsletterJid: targetJid });
 
         await m.react("✅");
-        await reply("✅ Details sent to channel using Document Mode!");
+        await reply("✅ Details sent using External Ad Link method!");
 
     } catch (e) {
         console.error("CSong Error:", e);
