@@ -89,7 +89,7 @@ cmd({
 
 cmd({
     pattern: "csong",
-    desc: "Send song to channel as Image + Voice (PTT)",
+    desc: "Send song details to channel only",
     category: "download",
     use: ".csong <jid> <song name>",
     filename: __filename
@@ -104,54 +104,30 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
         const songName = args.slice(1).join(" "); 
         const isChannel = targetJid.endsWith("@newsletter");
 
+        if (!isChannel) return reply("⚠️ කරුණාකර නිවැරදි Channel JID එකක් ලබා දෙන්න (@newsletter සහිත).");
+
         const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
         const botName = settings.botName || "ZANTA-MD";
 
         await m.react("🔍");
 
-        // 1. YouTube සෙවුම
+        const yts = require("yt-search");
         const search = await yts(songName);
         const data = search.videos[0];
         if (!data) return reply("❌ සින්දුව සොයාගත නොහැකි විය.");
 
-        // 2. Caption එක සැකසීම
         const timeLine = "───●──────────"; 
         const imageCaption = `✨ *𝐙𝐀𝐍𝐓𝐀-𝐌𝐃 𝐒𝐎𝐍𝐆 𝐔𝐏𝐋𝐎𝐀𝐃𝐄𝐑* ✨\n\n` +
                              `📝 *Title:* ${data.title}\n` +
-                             `🎧 *Status:* Sending Voice Note...\n\n` +
+                             `🎧 *Status:* Testing Details Upload...\n\n` +
                              `   ${timeLine}\n` +
                              `    ⇆ㅤㅤ◁ㅤ❚❚ㅤ▷ㅤ↻`;
 
-        // --- 🔘 CHANNEL එකට IMAGE එක සහ DETAILS යැවීම ---
-        // මෙහිදී message body එකේ newsletterJid දීම අනිවාර්ය වේ.
+        // --- 🔘 STEP 1: IMAGE & DETAILS TO CHANNEL ---
+        // මෙහිදී message type එක 'image' ලෙස Baileys වලට පැහැදිලිව ලබා දෙමු
         await zanta.sendMessage(targetJid, { 
             image: { url: data.thumbnail }, 
             caption: imageCaption,
-            contextInfo: {
-                mentionedJid: [mek.sender],
-                forwardingScore: 999,
-                isForwarded: true,
-            }
-        }, { 
-            newsletterJid: targetJid, // 👈 මේක තමයි චැනල් එකට යවන්න ඕන වැදගත්ම දේ
-            quoted: null 
-        });
-
-        await reply("✅ Details sent to channel. Downloading song...");
-        await m.react("📥");
-
-        // 3. සින්දුව බාගත කිරීම
-        const songData = await ytmp3(data.url, "128");
-        if (!songData || !songData.download || !songData.download.url) {
-            return reply("❌ සින්දුව Download කරගැනීමට නොහැකි විය.");
-        }
-
-        // --- 🔘 CHANNEL එකට VOICE (PTT) එක යැවීම ---
-        await zanta.sendMessage(targetJid, { 
-            audio: { url: songData.download.url }, 
-            mimetype: 'audio/mpeg', 
-            ptt: true,
-            waveform: new Uint8Array([0, 93, 10, 50, 20, 80, 40, 60, 30, 70, 10, 90, 0]),
             contextInfo: {
                 forwardingScore: 999,
                 isForwarded: true,
@@ -161,16 +137,13 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
                     newsletterName: botName
                 }
             }
-        }, { 
-            newsletterJid: targetJid, // 👈 මෙයද අනිවාර්ය වේ
-            quoted: null 
-        });
+        }, { newsletterJid: targetJid }); 
 
         await m.react("✅");
-        await reply(`🚀 Successfully uploaded to channel!`);
+        await reply("✅ Details sent to channel successfully!");
 
     } catch (e) {
-        console.error("CSong Error:", e);
+        console.error("CSong Test Error:", e);
         reply(`❌ Error: ${e.message}`);
     }
 });
