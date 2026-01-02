@@ -37,7 +37,6 @@ cmd({
     statusText += `┃ 7️⃣ *Always Online:* ${getStatus(settings.alwaysOnline)}\n`;
     statusText += `┃ 8️⃣ *Read Cmd:* ${getStatus(settings.readCmd)}\n`;
     statusText += `┃ 9️⃣ *Auto Voice:* ${getStatus(settings.autoVoice)}\n`;
-    statusText += `┃ 🔟 *Anti Badword:* ${getStatus(settings.antiBadword)}\n`;
     statusText += `┃\n`;
     statusText += `╰━━━━━━━━━━━━━━━┈⊷\n\n`;
     statusText += `*💡 අගය වෙනස් කිරීමට Reply කරන්න:*\n`;
