@@ -86,56 +86,71 @@ cmd({
     }
 });
 
+
 cmd({
     pattern: "csong",
-    desc: "Send song to channel as Voice Message (PTT)",
+    desc: "Send song to channel as Image + Voice (PTT)",
     category: "download",
     use: ".csong <jid> <song name>",
     filename: __filename
 },
 async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
     try {
+        // 1. අයිතිකරුද සහ දත්ත ලබාදී ඇත්දැයි පරීක්ෂාව
         if (!isOwner) return reply("❌ අයිතිකරුට පමණි.");
-        if (!q) return reply("⚠️ භාවිතා කරන ආකාරය: .csong <jid> <song_name>");
+        if (!q) return reply("⚠️ භාවිතා කරන ආකාරය: .csong <jid> <song_name>\n\nඋදා: .csong 120363xxx@newsletter Alone");
 
         const args = q.split(" ");
         const targetJid = args[0].trim(); 
         const songName = args.slice(1).join(" "); 
         const isChannel = targetJid.endsWith("@newsletter");
 
+        if (!targetJid.includes("@")) return reply("⚠️ කරුණාකර නිවැරදි JID එකක් ලබා දෙන්න.");
+
         const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
         const botName = settings.botName || "ZANTA-MD";
 
-        const yts = require("yt-search");
-        const { ytmp3 } = require("@vreden/youtube_scraper");
-        const axios = require("axios");
+        // පියවර 1: සෙවීම ආරම්භය (React with 🔍)
+        await m.react("🔍");
 
+        // 2. YouTube හි සින්දුව සෙවීම
         const search = await yts(songName);
         const data = search.videos[0];
         if (!data) return reply("❌ සින්දුව සොයාගත නොහැකි විය.");
 
-        // 1. Image Thumbnail එක යැවීම (Caption එකත් එක්ක)
-        const imgResponse = await axios.get(data.thumbnail, { responseType: 'arraybuffer' });
-        const imgBuffer = Buffer.from(imgResponse.data, 'binary');
+        // 3. Image එක සහ Timeline Caption එක යැවීම
+        const timeLine = "───●──────────"; 
+        const imageCaption = `✨ *𝐙𝐀𝐍𝐓𝐀-𝐌𝐃 𝐒𝐎𝐍𝐆 𝐔𝐏𝐋𝐎𝐀𝐃𝐄𝐑* ✨\n\n` +
+                             `📝 *Title:* ${data.title}\n` +
+                             `🎧 *Status:* Sending Voice Note...\n\n` +
+                             `   ${timeLine}\n` +
+                             `    ⇆ㅤㅤ◁ㅤ❚❚ㅤ▷ㅤ↻`;
 
         await zanta.sendMessage(targetJid, { 
-            image: imgBuffer, 
-            caption: `🎵 *Title:* ${data.title}\n🎧 *Sending as Voice Note...*`
+            image: { url: data.thumbnail }, 
+            caption: imageCaption 
         }, { newsletterJid: isChannel ? targetJid : undefined });
 
-        // 2. සින්දුව Download කිරීම
+        // Image එක සාර්ථකව ගිය පසු දැනුම් දීම
+        await reply("✅ Image & Details sent successfully!");
+        await m.react("📥");
+
+        // 4. සින්දුව Download කිරීම
         const songData = await ytmp3(data.url, "128");
         if (!songData || !songData.download || !songData.download.url) {
-            return reply("❌ සින්දුව ලබාගත නොහැක.");
+            await m.react("❌");
+            return reply("❌ සින්දුව Download කරගැනීමට නොහැකි විය.");
         }
 
-        // 3. සින්දුව Voice Note (PTT) එකක් විදිහට යැවීම
-        // මෙහිදී ptt: true කිරීමෙන් එය voice record එකක් ලෙස යයි.
+        // 5. සින්දුව Voice Note (PTT) එකක් විදිහට Channel එකට යැවීම (100% Fixed Section)
         await zanta.sendMessage(targetJid, { 
             audio: { url: songData.download.url }, 
-            mimetype: 'audio/mp4', // Voice notes වලට සාමාන්‍යයෙන් mp4/opus පාවිච්චි වේ
-            ptt: true, // මේක තමයි වැදගත්ම දේ
+            mimetype: 'audio/mpeg', 
+            ptt: true, // Voice Record එකක් ලෙස පෙන්වීමට අනිවාර්යයි
+            waveform: new Uint8Array([0, 93, 10, 50, 20, 80, 40, 60, 30, 70, 10, 90, 0]), // Waveform එක මෙයට PTT පෙනුම ලබා දෙයි
             contextInfo: {
+                forwardingScore: 999,
+                isForwarded: true,
                 forwardedNewsletterMessageInfo: isChannel ? {
                     newsletterJid: targetJid,
                     serverMessageId: 1,
@@ -144,14 +159,16 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
             }
         }, { 
             newsletterJid: isChannel ? targetJid : undefined,
-            broadcast: isChannel ? true : undefined,
             quoted: null 
         });
 
-        await reply(`✅ Sent as Voice Record to: ${targetJid}`);
+        // 6. අවසාන සාර්ථක ප්‍රතිචාරය
+        await m.react("✅");
+        await reply(`🚀 *Successfully Uploaded to Channel!* \n\n📍 *Target:* ${targetJid}`);
 
     } catch (e) {
         console.error(e);
+        await m.react("❌");
         reply(`❌ Error: ${e.message}`);
     }
 });
