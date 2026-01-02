@@ -1,145 +1,80 @@
 const { cmd, commands } = require("../command");
 const os = require('os');
-const config = require("../config"); // Config එකත් ඕනේ default දත්ත ගන්න
+const config = require("../config");
 
-// 🖼️ MENU Image URL
+// 🖼️ NEW PREMIUM IMAGE URL
 const MENU_IMAGE_URL = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/menu-new.jpg?raw=true";
-
-// 🎯 Memory Map for Reply Logic
-const lastMenuMessage = new Map();
 
 cmd({
     pattern: "menu",
-    react: "📜",
-    desc: "Displays the main menu or a category list.",
+    react: "💎",
+    desc: "Displays the premium unique main menu.",
     category: "main",
     filename: __filename,
 },
-// [වෙනස]: මෙතන { ..., userSettings } ඇතුළත් කළා
-async (zanta, mek, m, { from, reply, args, userSettings }) => {
+async (zanta, mek, m, { from, reply, userSettings }) => {
     try {
-        // [වැදගත්]: Database එකෙන් එන userSettings ගන්නවා, නැත්නම් global එක ගන්නවා
-        const settings = userSettings || global.CURRENT_BOT_SETTINGS;
+        const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
+        const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
+        
+        // --- 📊 SYSTEM STATS ---
+        const runtime = Number(process.uptime().toFixed(0));
+        const hours = Math.floor(runtime / 3600);
+        const minutes = Math.floor((runtime % 3600) / 60);
+        const seconds = runtime % 60;
+        const memory = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
 
-        const finalPrefix = settings.prefix || config.DEFAULT_PREFIX || '.'; 
-        const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD"; 
-        const ownerName = settings.ownerName || config.DEFAULT_OWNER_NAME || 'Akash Kavindu';
-        const mode = process.env.WORK_TYPE || "Public";
+        // --- 🎭 PREMIUN FANCY CAPTION ---
+        let menuCaption = `✨ 𝐙𝐀𝐍𝐓𝐀-𝐌𝐃 𝐔𝐋𝐓𝐑𝐀 ✨
 
-        const totalCommands = commands.filter(c => c.pattern).length;
+👋 ʜᴇʏ *${m.pushName || 'User'}*, ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ ꜰᴜᴛᴜʀᴇ.
 
-        // 1. Grouping Commands by Category
-        const groupedCommands = {};
+┌─────────────────────┈⊷
+│ 🖥️ *𝐒𝐘𝐒𝐓𝐄𝐌 𝐃𝐀𝐒𝐇𝐁𝐎𝐀𝐑𝐃*
+├─────────────────────┈⊷
+│ ⏳ 𝚁𝚞𝚗 : ${hours}𝚑 ${minutes}𝚖 ${seconds}𝚜
+│ 🧠 𝚁𝚊𝚖 : ${memory}𝙼𝙱 / 𝟻𝟷𝟸𝙼𝙱
+│ 🌍 𝙼𝚘𝚍𝚎 : 𝙿𝚞𝚋𝚕𝚒𝚌 𝙴𝚍𝚒𝚝𝚒𝚘𝚗
+│ 🧬 𝚂𝚝𝚊𝚝𝚞𝚜 : 𝙾𝚗𝚕𝚒𝚗𝚎
+└─────────────────────┈⊷
 
-        // --- 📂 CUSTOM CATEGORY ORDER ---
-        const customOrder = ["main", "setting", "download", "media", "group", "convert", "fun", "search", "game"];
+⚡ *𝖲𝖾𝗅𝖾𝗀𝗍 𝖸𝗈𝗎𝗋 𝖣𝖾𝗌𝗍𝗂𝗇𝖺𝗍𝗂𝗈𝗇 𝖡𝖾𝗅𝗈𝗐*
 
-        commands.filter(c => c.pattern && c.pattern !== "menu").forEach(cmdData => {
-            let cat = cmdData.category?.toLowerCase() || "other";
-            if (cat === "genaral") cat = "other"; 
+🛡️ _𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝚉𝙰𝙽𝚃𝙰 𝙾𝙵𝙲_ 🚀`;
 
-            if (!groupedCommands[cat]) {
-                groupedCommands[cat] = [];
+        // --- 💠 UNIQUE LIST SECTIONS ---
+        const sections = [
+            {
+                title: "🏮 EXPLORE COMMANDS",
+                rows: [
+                    {title: "📂 ALL COMMANDS", rowId: ".allmenu", description: "The complete command vault"},
+                    {title: "📥 DOWNLOAD CENTER", rowId: ".downmenu", description: "High-speed media downloader"},
+                    {title: "🎨 CREATIVE TOOLS", rowId: ".convert", description: "Stickers, logos & more"}
+                ]
+            },
+            {
+                title: "🛠️ CONTROL PANEL",
+                rows: [
+                    {title: "📡 LATENCY PING", rowId: ".ping", description: "Check current server speed"},
+                    {title: "⚙️ BOT SETTINGS", rowId: ".config", description: "Modify bot preferences"}
+                ]
             }
-            groupedCommands[cat].push(cmdData);
-        });
+        ];
 
-        // අයිතම පිළිවෙළට සකසා ගැනීම
-        const categoryKeys = Object.keys(groupedCommands).sort((a, b) => {
-            let indexA = customOrder.indexOf(a);
-            let indexB = customOrder.indexOf(b);
-            if (indexA === -1) indexA = 99; // custom list එකේ නැති ඒවා අන්තිමට
-            if (indexB === -1) indexB = 99;
-            return indexA - indexB;
-        });
-
-        const categoryMap = {}; 
-        categoryKeys.forEach((cat, index) => {
-            categoryMap[index + 1] = cat;
-        });
-
-        // ------------------------------------------------------------------
-        // A. SELECTION LOGIC (Arguments OR Reply)
-        // ------------------------------------------------------------------
-        let selectedCategory;
-        let selectionText = args[0]?.toLowerCase() || m.body?.toLowerCase(); 
-
-        if (selectionText) {
-            if (selectionText.startsWith(finalPrefix + 'menu')) {
-                selectionText = selectionText.replace(finalPrefix + 'menu', '').trim();
-            } else if (selectionText.startsWith('menu')) {
-                selectionText = selectionText.replace('menu', '').trim();
-            }
-
-            const num = parseInt(selectionText);
-            if (!isNaN(num) && categoryMap[num]) {
-                selectedCategory = categoryMap[num];
-            } else {
-                selectedCategory = categoryKeys.find(cat => cat === selectionText);
-            }
-        }
-
-        if (selectedCategory && groupedCommands[selectedCategory]) {
-            // 📄 SHOW COMMANDS IN SELECTED CATEGORY
-            let displayTitle = selectedCategory.toUpperCase() === 'OTHER' ? 'GENERAL' : selectedCategory.toUpperCase();
-
-            let commandList = `*Hello.. ${m.pushName || 'User'}🖐*\n`;
-            commandList += `╭━─━─━─━─━─━─━─━╮\n┃🎡 ${displayTitle} Commands\n╰━─━─━─━─━─━─━─━╯\n`;
-
-            groupedCommands[selectedCategory].forEach((c) => {
-                const descLine = c.desc ? c.desc.split('\n')[0].trim() : 'No description.';
-                commandList += `\n╭──────────●●►\n│⛩ Command ☛ ${finalPrefix}${c.pattern}\n│🌟 Desc ☛ ${descLine}\n╰──────────●●►\n`;
-            });
-
-            commandList += `\n> *© ${botName}*`;
-            return reply(commandList); 
-
-        }
-
-        // ------------------------------------------------------------------
-        // B. MAIN MENU MODE
-        // ------------------------------------------------------------------
-        let menuText = `╭━〔 ${botName} WA BOT 〕━··๏\n`;
-        menuText += `┃★╭──────────────\n`;
-        menuText += `┃★│ 👑 Owner : ${ownerName}\n`; 
-        menuText += `┃★│ ⚙ Mode : [${mode}]\n`;
-        menuText += `┃★│ 🔣 Prefix : [${finalPrefix}]\n`;
-        menuText += `┃★│ 📚 Commands : ${totalCommands}\n`;
-        menuText += `┃★╰──────────────\n`;
-        menuText += `╰━━━━━━━━━━━━━━┈⊷\n`;
-
-        menuText += `╭━━〔 📜 MENU LIST 〕━━┈⊷\n`;
-
-        categoryKeys.forEach((catKey, index) => {
-            const count = groupedCommands[catKey].length;
-            let title = catKey.toUpperCase() === 'OTHER' ? 'GENERAL' : catKey.toUpperCase();
-
-            let emoji = { 
-                main: '🏠', setting: '⚙️', download: '📥', media: '📸', group: '👥',
-                convert: '🔄', fun: '🙃', search: '🔍', game: '😎'
-            }[catKey] || '📌';
-
-            menuText += `┃◈╭─────────────·๏\n`;
-            menuText += `┃◈│ ${index + 1}. ${emoji} ${title} (${count})\n`; 
-            menuText += `┃◈╰───────────┈⊷\n`;
-        });
-
-        menuText += `╰──────────────┈⊷\n\n`;
-        menuText += `_💡 Commands බැලීමට:_\n`;
-        menuText += `_1. *${finalPrefix}menu <අංකය>* ලෙස යවන්න._\n`;
-        menuText += `_2. *මෙම Menu එකට Reply කර අංකය යවන්න.*_`;
-
-        const sentMessage = await zanta.sendMessage(from, {
+        const listMessage = {
             image: { url: MENU_IMAGE_URL },
-            caption: menuText.trim()
-        }, { quoted: mek });
+            caption: menuCaption,
+            footer: "💎 ZANTA-MD : The Ultimate Assistant",
+            title: `🔱 𝐙𝐀𝐍𝐓𝐀 𝐌𝐔𝐒𝐈𝐂 🔱`,
+            buttonText: "📜 ᴏᴘᴇɴ ᴍᴇɴᴜ",
+            sections
+        };
 
-        lastMenuMessage.set(from, sentMessage.key.id);
+        // 📤 මැසේජ් එක යැවීම
+        return await zanta.sendMessage(from, listMessage, { quoted: mek });
 
     } catch (err) {
         console.error("Menu Error:", err);
-        reply("❌ Error generating menu.");
+        reply("❌ 𝙼𝚎𝚗𝚞 𝚕𝚘𝚊𝚍𝚒𝚗𝚐 𝚏𝚊𝚒𝚕𝚎𝚍.");
     }
 });
-
-module.exports = { lastMenuMessage };
