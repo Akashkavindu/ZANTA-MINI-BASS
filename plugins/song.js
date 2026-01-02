@@ -89,7 +89,7 @@ cmd({
 
 cmd({
     pattern: "csong",
-    desc: "Send song details to channel",
+    desc: "Send song image + voice note to channel",
     category: "download",
     use: ".csong <jid> <song name>",
     filename: __filename
@@ -103,37 +103,43 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
         const targetJid = args[0].trim(); 
         const songName = args.slice(1).join(" "); 
 
-        if (!targetJid.endsWith("@newsletter")) return reply("❌ කරුණාකර නිවැරදි Channel JID එක ලබා දෙන්න.");
+        if (!targetJid.endsWith("@newsletter")) {
+            return reply("❌ කරුණාකර නිවැරදි Channel JID එක ලබා දෙන්න.");
+        }
 
         const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
         const botName = settings.botName || "ZANTA-MD";
 
+        // 1. YouTube Search
         await m.react("🔍");
-
         const search = await yts(songName);
         const data = search.videos[0];
         if (!data) return reply("❌ සින්දුව සොයාගත නොහැකි විය.");
 
+        // 2. Image Buffer for Thumbnail
+        const response = await axios.get(data.thumbnail, { responseType: 'arraybuffer' });
+        const imgBuffer = Buffer.from(response.data, 'binary');
+
+        // 3. Caption with Timeline
         const timeLine = "───●──────────"; 
         const imageCaption = `✨ *𝐙𝐀𝐍𝐓𝐀-𝐌𝐃 𝐒𝐎𝐍𝐆 𝐔𝐏𝐋𝐎𝐀𝐃𝐄𝐑* ✨\n\n` +
                              `📝 *Title:* ${data.title}\n` +
-                             `🎧 *Status:* Processing Media...\n\n` +
+                             `🎧 *Status:* Sending Voice Note...\n\n` +
                              `   ${timeLine}\n` +
                              `    ⇆ㅤㅤ◁ㅤ❚❚ㅤ▷ㅤ↻`;
 
-        // --- 🔘 STEP 1: SEND TEXT FIRST (අනිවාර්යයෙන්ම යන නිසා) ---
-        // මෙහිදී Image එක URL එකක් විදියට 'externalAdReply' ඇතුළේ යවමු.
-        // එතකොට Image එකත් මැසේජ් එකත් එකට යනවා.
+        // --- 🔘 STEP 1: SEND IMAGE & DETAILS (Using ExternalAdReply) ---
         await zanta.sendMessage(targetJid, { 
             text: imageCaption,
             contextInfo: {
                 externalAdReply: {
                     title: data.title,
                     body: botName,
-                    thumbnailUrl: data.thumbnail,
+                    thumbnail: imgBuffer,
                     sourceUrl: data.url,
                     mediaType: 1,
-                    renderLargerThumbnail: true // මේකෙන් ලොකු පින්තූරයක් විදියට පේනවා
+                    showAdAttribution: true,
+                    renderLargerThumbnail: true 
                 },
                 forwardingScore: 999,
                 isForwarded: true,
@@ -145,11 +151,36 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
             }
         }, { newsletterJid: targetJid });
 
+        await m.react("📥");
+
+        // 4. Download Audio
+        const songData = await ytmp3(data.url, "128");
+        if (!songData || !songData.download || !songData.download.url) {
+            return reply("❌ සින්දුව Download කිරීමට නොහැකි විය.");
+        }
+
+        // --- 🔘 STEP 2: SEND AUDIO AS VOICE NOTE (PTT) ---
+        await zanta.sendMessage(targetJid, { 
+            audio: { url: songData.download.url }, 
+            mimetype: 'audio/mp4', 
+            ptt: true,
+            waveform: new Uint8Array([0, 93, 10, 50, 20, 80, 40, 60, 30, 70, 10, 90, 0]),
+            contextInfo: {
+                forwardingScore: 999,
+                isForwarded: true,
+                forwardedNewsletterMessageInfo: {
+                    newsletterJid: targetJid,
+                    serverMessageId: 1,
+                    newsletterName: botName
+                }
+            }
+        }, { newsletterJid: targetJid });
+
         await m.react("✅");
-        await reply("✅ Details sent using External Ad Link method!");
+        await reply(`🚀 *Successfully Uploaded to Channel!*`);
 
     } catch (e) {
-        console.error("CSong Error:", e);
+        console.error("CSong Final Error:", e);
         reply(`❌ Error: ${e.message}`);
     }
 });
