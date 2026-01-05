@@ -14,14 +14,14 @@ const SettingsSchema = new mongoose.Schema({
     alwaysOnline: { type: String, default: 'false' },
     readCmd: { type: String, default: 'false' },
     autoVoice: { type: String, default: 'false' },
+    autoStatusReact: { type: String, default: 'false' }, // ✨ අලුතින් එකතු කළා
 });
 
 const Settings = mongoose.models.Settings || mongoose.model('Settings', SettingsSchema);
 
 // --- [MEMORY CACHE] ---
-// හැමවෙලේම DB එකට යන එක නවත්වා RAM එකේ පොඩි cache එකක් තබා ගැනීම
 const settingsCache = new Map();
-const CACHE_TTL = 10 * 60 * 1000; // විනාඩි 10ක් Cache එක තබා ගනී
+const CACHE_TTL = 10 * 60 * 1000; 
 
 async function connectDB() {
     if (mongoose.connection.readyState === 1) return;
@@ -29,11 +29,11 @@ async function connectDB() {
         await mongoose.connect(MONGO_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            maxPoolSize: 5 // Free Tier එකේදී connections ප්‍රමාණය සීමා කිරීම හොඳයි
+            maxPoolSize: 5 
         });
         console.log("✅ MongoDB Connected!");
     } catch (error) {
-        // console.error ඉවත් කර සරලව තැබුවා
+        // error handling
     }
 }
 
@@ -43,22 +43,20 @@ async function getBotSettings(userNumber) {
     const targetId = cleanId(userNumber);
     if (!targetId) return null;
 
-    // 1. මුලින් Cache එකේ තියෙනවාද බලන්න
     if (settingsCache.has(targetId)) {
         return settingsCache.get(targetId);
     }
 
     try {
-        let settings = await Settings.findOne({ id: targetId }).lean(); // .lean() පාවිච්චි කිරීමෙන් RAM එක ගොඩක් බේරේ
+        let settings = await Settings.findOne({ id: targetId }).lean(); 
         
         if (!settings) {
             settings = await Settings.create({ id: targetId });
             settings = settings.toObject();
         }
 
-        // 2. Cache එකට දාන්න
         settingsCache.set(targetId, settings);
-        setTimeout(() => settingsCache.delete(targetId), CACHE_TTL); // කාලයකට පසු cache එක අයින් කරන්න
+        setTimeout(() => settingsCache.delete(targetId), CACHE_TTL); 
 
         return settings;
     } catch (e) {
@@ -76,7 +74,6 @@ async function updateSetting(userNumber, key, value) {
         );
 
         if (result) {
-            // 3. Update කරන විට Cache එකත් Update කරන්න
             settingsCache.set(targetId, result);
         }
         return !!result;
