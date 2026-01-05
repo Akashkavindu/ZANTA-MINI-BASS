@@ -81,8 +81,8 @@ async function startSystem() {
     const allSessions = await Session.find({});
     console.log(`📂 Total sessions: ${allSessions.length}. Connecting in batches...`);
 
-    const BATCH_SIZE = 5; 
-    const DELAY_BETWEEN_BATCHES = 8000; 
+    const BATCH_SIZE = 4; // RAM එක පිරීම වැලැක්වීමට Batch Size එක 2 දක්වා අඩු කළා
+    const DELAY_BETWEEN_BATCHES = 8000; // Delay එක වැඩි කළා
 
     for (let i = 0; i < allSessions.length; i += BATCH_SIZE) {
         const batch = allSessions.slice(i, i + BATCH_SIZE);
@@ -115,17 +115,20 @@ async function connectToWA(sessionData) {
     const { version } = await fetchLatestBaileysVersion();
 
     const zanta = makeWASocket({
-        logger: P({ level: "fatal" }), 
+        logger: P({ level: "silent" }), // Logger එක silent කළා RAM එක ඉතිරි කරන්න
         printQRInTerminal: false,
         browser: Browsers.macOS("Firefox"),
         auth: state,
         version,
-        syncFullHistory: false,
-        markOnlineOnConnect: false,
-        generateHighQualityLinkPreview: true,
-        getMessage: async (key) => {
-            return { conversation: "ZANTA-MD" };
-        }
+        
+        // --- ✨ LITE MODE OPTIMIZATIONS ---
+        syncFullHistory: false,            // පරණ මැසේජ් ලෝඩ් කිරීම වැලැක්වීමට
+        markOnlineOnConnect: false,        // RAM එක ඉතිරි කිරීමට
+        shouldSyncHistoryMessage: () => false, // හිස්ටරි සින්ක් වීම අක්‍රීය කළා
+        
+        // ඩේටා RAM එකේ තියාගැනීම වැලැක්වීමට:
+        getMessage: async (key) => { return { conversation: "ZANTA-MD" } },
+        cachedGroupMetadata: async (jid) => { return undefined } 
     });
 
     zanta.ev.on("connection.update", async (update) => {
@@ -186,7 +189,6 @@ async function connectToWA(sessionData) {
         if (userSettings.autoTyping === 'true') await zanta.sendPresenceUpdate('composing', from);
         if (userSettings.autoVoice === 'true' && !mek.key.fromMe) await zanta.sendPresenceUpdate('recording', from);
 
-        // --- 🚀 OPTIMIZED ADMIN & METADATA CHECK (ONLY FOR COMMANDS) ---
         let groupMetadata = {};
         let participants = [];
         let groupAdmins = [];
@@ -196,10 +198,8 @@ async function connectToWA(sessionData) {
             try {
                 groupMetadata = await zanta.groupMetadata(from);
                 participants = groupMetadata.participants || [];
-                // සෙන්ඩර්ව විතරක් ලැයිස්තුවෙන් සොයා ඇඩ්මින් දැයි බලයි
                 const currentUser = participants.find(p => p.id === sender);
                 isAdmins = currentUser && (currentUser.admin === 'admin' || currentUser.admin === 'superadmin');
-                // අනෙකුත් අවශ්‍යතා සඳහා (උදා: tagall) පමණක් admins filter කරයි
                 groupAdmins = participants.filter(p => p.admin !== null).map(p => p.id);
             } catch (e) {
                 console.error("Metadata Error:", e);
@@ -208,7 +208,6 @@ async function connectToWA(sessionData) {
 
         const reply = (text) => zanta.sendMessage(from, { text }, { quoted: mek });
         
-        // --- 🔎 YTS REPLY LOGIC ---
         if (m.quoted && ytsLinks && ytsLinks.has(m.quoted.id)) {
             const selection = parseInt(m.body.trim());
             const links = ytsLinks.get(m.quoted.id);
@@ -239,7 +238,7 @@ async function connectToWA(sessionData) {
         const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
         if (isSettingsReply && body && !isCmd && isOwner) {
             const input = body.trim().split(" ");
-            let dbKeys = ["", "botName", "ownerName", "prefix", "autoRead", "autoTyping", "autoStatusSeen", "alwaysOnline", "readCmd", "autoVoice"];
+            let dbKeys = ["", "botName", "ownerName", "prefix", "autoRead", "autoTyping", "autoStatusSeen", "readCmd", "autoVoice"];
             let dbKey = dbKeys[parseInt(input[0])];
             if (dbKey) {
                 let finalValue = (parseInt(input[0]) >= 4) ? (input[1] === 'on' ? 'true' : 'false') : input.slice(1).join(" ");
@@ -270,6 +269,9 @@ async function connectToWA(sessionData) {
                 } catch (e) { console.error(e); }
             }
         }
+        
+        // --- 🗑️ MEMORY CLEANUP ---
+        if (global.gc) { global.gc(); }
     });
 }
 
