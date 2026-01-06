@@ -6,10 +6,10 @@ const { ytmp4 } = require("@vreden/youtube_scraper");
 const ytsLinks = new Map();
 
 cmd({
-    pattern: "yts",
+    pattern: "video",
     alias: ["ytsearch"],
     react: "🔎",
-    category: "search",
+    category: "download",
     filename: __filename,
 }, async (zanta, mek, m, { from, reply, q }) => {
     try {
