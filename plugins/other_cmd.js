@@ -121,7 +121,7 @@ cmd({
     pattern: "tr",
     alias: ["translate"],
     react: "🌍",
-    category: "convert",
+    category: "tools",
     filename: __filename,
 }, async (zanta, mek, m, { from, reply, q, userSettings }) => {
     try {
