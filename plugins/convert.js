@@ -78,7 +78,7 @@ cmd({
     alias: ["aiimg", "draw"],
     react: "🎨",
     desc: "create AI Images.",
-    category: "tools",
+    category: "download",
     filename: __filename,
 }, async (zanta, mek, m, { from, reply, args }) => {
     try {
