@@ -54,29 +54,6 @@ const getMedia = (quoted) => {
     return null;
 };
 
-// 4. 🔗 MEDIA TO URL (.tourl)
-cmd({
-    pattern: "tourl",
-    alias: ["url"],
-    react: "🔗",
-    desc: "Convert to url.",
-    category: "convert",
-    filename: __filename,
-}, async (zanta, mek, m, { from, reply, quoted }) => {
-    try {
-        let media = getMedia(quoted);
-        if (!media || (media.type !== 'image' && media.type !== 'video')) return reply("*Media එකකට Reply කරන්න!* ❌");
-
-        reply("*URL එක සාදමින් පවතී...* ⏳");
-        const buffer = await downloadMedia(media.data, media.type);
-        const form = new FormData();
-        form.append('fileToUpload', buffer, 'zanta.jpg');
-        form.append('reqtype', 'fileupload');
-
-        const res = await axios.post('https://catbox.moe/user/api.php', form, { headers: form.getHeaders() });
-        reply(`*🔗 Media URL:* \n${res.data}`);
-    } catch (e) { reply("*Error uploading media!*"); }
-});
 
 // 5. 🏁 TEXT TO QR (.toqr)
 cmd({
@@ -94,46 +71,6 @@ cmd({
     } catch (e) { reply("Error!"); }
 });
 
-// 6. ✂️ REMOVE BG (.removebg)
-cmd({
-    pattern: "removebg",
-    alias: ["rmbg"],
-    react: "✂️",
-    desc: "Remove background",
-    category: "convert",
-    filename: __filename,
-}, async (zanta, mek, m, { from, reply, quoted }) => {
-    try {
-        let media = getMedia(quoted);
-        if (!media || media.type !== 'image') return reply("*ඡායාරූපයකට Reply කරන්න!* ❌");
-
-        reply("*පසුබිම ඉවත් කරමින් පවතී...* ⏳");
-
-        const buffer = await downloadMedia(media.data, 'image');
-        if (!buffer) return reply("*ඡායාරූපය බාගත කිරීම අසාර්ථකයි!*");
-
-        const form = new FormData();
-        form.append('size', 'auto');
-        form.append('image_file', buffer, { filename: 'image.jpg' });
-
-        const res = await axios.post('https://api.remove.bg/v1.0/removebg', form, {
-            headers: { 
-                ...form.getHeaders(), 
-                'X-Api-Key': REMOVE_BG_API_KEY // මෙහිදී ඉහළින් ඇති Key එක ස්වයංක්‍රීයව ගනු ලබයි
-            },
-            responseType: 'arraybuffer'
-        });
-
-        await zanta.sendMessage(from, { 
-            image: Buffer.from(res.data), 
-            caption: "> *Background Removed by ZANTA-MD*" 
-        }, { quoted: mek });
-
-    } catch (e) { 
-        console.error(e);
-        reply("*Error! API Key එක වැරදි හෝ මාසික සීමාව (Credits 50) අවසන් වී තිබිය හැක.*"); 
-    }
-});
 
 // 7. 🎨 AI IMAGE GENERATOR (.gen)
 cmd({
