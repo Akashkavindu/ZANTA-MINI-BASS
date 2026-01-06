@@ -241,37 +241,43 @@ async function connectToWA(sessionData) {
             }
         }
 
-        const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
-if (isSettingsReply && body && !isCmd && isOwner) {
-    const input = body.trim().split(" ");
-    
-    let dbKeys = ["", "botName", "ownerName", "prefix", "password", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice"];
-    
-    let index = parseInt(input[0]);
-    let dbKey = dbKeys[index];
+const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
+        if (isSettingsReply && body && !isCmd && isOwner) {
+            const input = body.trim().split(" ");
+            
+            let dbKeys = ["", "botName", "ownerName", "prefix", "password", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice"];
+            
+            let index = parseInt(input[0]);
+            let dbKey = dbKeys[index];
 
-    if (dbKey) {
-        let finalValue;
+            if (dbKey) {
+                let finalValue;
+                if (index >= 5) {
+                    finalValue = (input[1] === 'on' ? 'true' : 'false');
+                } else {
+                    finalValue = input.slice(1).join(" ");
+                }
 
-        // 5 සහ ඊට ඉහළ ඒවා පමණක් on/off (Boolean) ලෙස සලකන්න
-        if (index >= 5) {
-            finalValue = (input[1] === 'on' ? 'true' : 'false');
-        } else {
-            // botName, ownerName, prefix සහ Password (index 1-4) Text ලෙස සලකන්න
-            finalValue = input.slice(1).join(" ");
+                await updateSetting(userNumber, dbKey, finalValue);
+                if (userSettings) {
+                    userSettings[dbKey] = finalValue;
+                }
+
+                if (dbKey === "password") {
+                    let passMsg = `🔐 *WEB SITE PASSWORD UPDATED* 🔐\n\n`;
+                    passMsg += `🔑 *New Password:* ${finalValue}\n`;
+                    passMsg += `👤 *User ID:* ${userNumber}\n\n`;
+                    passMsg += `🌐 *Log in site using password:*\n`;
+                    passMsg += `https://zanta-dashboard.netlify.app\n\n`;
+                    passMsg += `> *Use this password to login to your dashboard.*`;
+                    await reply(passMsg);
+                } else {
+                    await reply(`✅ *${dbKey}* updated to: *${finalValue}*`);
+                }
+                
+                return;
+            }
         }
-
-        await updateSetting(userNumber, dbKey, finalValue);
-        
-        // Local cache එක update කිරීම
-        if (userSettings) {
-            userSettings[dbKey] = finalValue;
-        }
-
-        await reply(`✅ *${dbKey}* updated to: *${finalValue}*`);
-        return;
-    }
-}
 
         const isMenuReply = (m.quoted && lastMenuMessage && lastMenuMessage.get(from) === m.quoted.id);
         const isHelpReply = (m.quoted && lastHelpMessage && lastHelpMessage.get(from) === m.quoted.id);
