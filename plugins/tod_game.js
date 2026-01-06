@@ -36,7 +36,7 @@ cmd(
         pattern: "tod",
         react: "😈",
         desc: "Get challenge or question.",
-        category: "game",
+        category: "tools",
         filename: __filename,
     },
     async (
