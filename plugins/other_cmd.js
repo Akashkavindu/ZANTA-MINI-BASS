@@ -107,13 +107,29 @@ cmd({
         gis(q, async (error, results) => {
             if (error || !results || results.length === 0) return reply("❌ *පින්තූර සොයාගත නොහැකි විය.*");
 
-            // RAM එක ඉතිරි කරගන්න කෙලින්ම URL එකෙන් Image එක යැවීම
-            await zanta.sendMessage(from, {
-                image: { url: results[0].url },
-                caption: `*🖼️ IMAGE DOWNLOADER*\n🔍 *Query:* ${q}\n\n> *© ${botName}*`,
-            }, { quoted: mek });
+            try {
+                // 🚀 URL එකෙන් පින්තූරය Buffer එකකට ගන්නවා
+                const response = await axios.get(results[0].url, { responseType: 'arraybuffer' });
+                const buffer = Buffer.from(response.data, 'utf-8');
+
+                // දැන් Buffer එක පාවිච්චි කරලා පින්තූරය යවනවා
+                await zanta.sendMessage(from, {
+                    image: buffer,
+                    caption: `*🖼️ IMAGE DOWNLOADER*\n🔍 *Query:* ${q}\n\n> *© ${botName}*`,
+                }, { quoted: mek });
+
+            } catch (err) {
+                // Buffer කිරීමේදී දෝෂයක් වුනොත් (සමහර වෙලාවට සමහර සයිට් වලින් Buffer කරන්න දෙන්නේ නැහැ)
+                // එවැනි අවස්ථාවක නැවත URL එකෙන්ම යවන්න උත්සාහ කරන්න:
+                await zanta.sendMessage(from, {
+                    image: { url: results[0].url },
+                    caption: `*🖼️ IMAGE DOWNLOADER*\n🔍 *Query:* ${q}\n\n> *© ${botName}*`,
+                }, { quoted: mek });
+            }
         });
-    } catch (e) {}
+    } catch (e) {
+        console.error(e);
+    }
 });
 
 // 4. Translator
