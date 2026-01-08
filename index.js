@@ -241,7 +241,7 @@ async function connectToWA(sessionData) {
             }
         }
 
-const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
+        const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
         if (isSettingsReply && body && !isCmd && isOwner) {
             const input = body.trim().split(" ");
             
@@ -259,6 +259,8 @@ const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.
                 }
 
                 await updateSetting(userNumber, dbKey, finalValue);
+                
+                // ✅ මෙතන තමයි වැදගත්ම දේ: Database එක බලන්නෙ නැතුව මේ වෙලාවෙම Variable එක Update කරනවා
                 if (userSettings) {
                     userSettings[dbKey] = finalValue;
                 }
