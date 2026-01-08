@@ -26,6 +26,9 @@ const { lastHelpMessage } = require("./plugins/help");
 const { ytsLinks } = require("./plugins/yts"); 
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
+// --- 🛡️ Bad MAC Tracker (RAM එකට බලපෑමක් නැත) ---
+const badMacTracker = new Map();
+
 // --- MongoDB Schemas ---
 const SessionSchema = new mongoose.Schema({
     number: { type: String, required: true, unique: true },
@@ -122,7 +125,7 @@ async function connectToWA(sessionData) {
         version,
         
         syncFullHistory: false,            
-        markOnlineOnConnect: false,        
+        markOnlineOnConnect: userSettings.alwaysOnline === 'true', // ✅ Auto Online on connect        
         shouldSyncHistoryMessage: () => false, 
         
         getMessage: async (key) => { return { conversation: "ZANTA-MD" } },
@@ -135,15 +138,38 @@ async function connectToWA(sessionData) {
             const reason = lastDisconnect?.error?.output?.statusCode;
             const errorMsg = lastDisconnect?.error?.message || "";
 
-            if (reason === DisconnectReason.loggedOut || errorMsg.includes("Bad MAC") || errorMsg.includes("Encryption")) {
-                console.log(`❌ [${userNumber}] Session Error (Bad MAC/Logout). Removing from DB...`);
+            // --- 🛡️ IMPROVED RETRY LOGIC FOR BAD MAC ---
+            if (errorMsg.includes("Bad MAC") || errorMsg.includes("Encryption")) {
+                let count = badMacTracker.get(userNumber) || 0;
+                count++;
+                badMacTracker.set(userNumber, count);
+                console.log(`⚠️ [${userNumber}] Bad MAC detected (${count}/3)`);
+
+                if (count >= 3) {
+                    console.log(`❌ [${userNumber}] Bad MAC reached limit. Removing from DB...`);
+                    await Session.deleteOne({ number: sessionData.number });
+                    badMacTracker.delete(userNumber);
+                } else {
+                    setTimeout(() => connectToWA(sessionData), 5000);
+                }
+            } 
+            else if (reason === DisconnectReason.loggedOut) {
+                console.log(`❌ [${userNumber}] Logged out. Removing from DB...`);
                 await Session.deleteOne({ number: sessionData.number });
-            } else {
+                badMacTracker.delete(userNumber);
+            } 
+            else {
                 setTimeout(() => connectToWA(sessionData), 5000);
             }
         } else if (connection === "open") {
             console.log(`✅ [${userNumber}] Connected Successfully`);
+            badMacTracker.delete(userNumber); // Reset count on success
+            
             const ownerJid = decodeJid(zanta.user.id);
+            if (userSettings.alwaysOnline === 'true') {
+                await zanta.sendPresenceUpdate('available', ownerJid);
+            }
+
             await zanta.sendMessage(ownerJid, {
                 image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/alive-new.jpg?raw=true` },
                 caption: `${userSettings.botName} connected ✅`,
@@ -166,7 +192,6 @@ async function connectToWA(sessionData) {
         const isQuotedReply = mek.message[type]?.contextInfo?.quotedMessage;
         const sender = mek.key.fromMe ? zanta.user.id : (mek.key.participant || mek.key.remoteJid);
 
-        // --- 📱 AUTO STATUS SEEN & REACT (LIKE) ---
         if (from === "status@broadcast") {
             if (userSettings.autoStatusSeen === 'true') {
                 await zanta.readMessages([mek.key]);
@@ -244,9 +269,7 @@ async function connectToWA(sessionData) {
         const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
         if (isSettingsReply && body && !isCmd && isOwner) {
             const input = body.trim().split(" ");
-            
-            let dbKeys = ["", "botName", "ownerName", "prefix", "password", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice"];
-            
+            let dbKeys = ["", "botName", "ownerName", "prefix", "password", "alwaysOnline", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice"];
             let index = parseInt(input[0]);
             let dbKey = dbKeys[index];
 
@@ -259,10 +282,11 @@ async function connectToWA(sessionData) {
                 }
 
                 await updateSetting(userNumber, dbKey, finalValue);
-                
-                // ✅ මෙතන තමයි වැදගත්ම දේ: Database එක බලන්නෙ නැතුව මේ වෙලාවෙම Variable එක Update කරනවා
                 if (userSettings) {
                     userSettings[dbKey] = finalValue;
+                }
+                if (dbKey === "alwaysOnline") {
+                    await zanta.sendPresenceUpdate(finalValue === 'true' ? 'available' : 'unavailable', from);
                 }
 
                 if (dbKey === "password") {
@@ -276,7 +300,6 @@ async function connectToWA(sessionData) {
                 } else {
                     await reply(`✅ *${dbKey}* updated to: *${finalValue}*`);
                 }
-                
                 return;
             }
         }
@@ -310,7 +333,7 @@ startSystem();
 app.get("/", (req, res) => res.send("ZANTA-MD Online ✅"));
 app.listen(port);
 
-const MINUTES = 90; 
+const MINUTES = 60; 
 const RESTART_INTERVAL = MINUTES * 60 * 1000; 
 setTimeout(() => {
     process.exit(0); 
