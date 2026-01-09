@@ -33,18 +33,19 @@ cmd({
     statusText += `┃ ❷ *Owner:* ${ownerName}\n`;
     statusText += `┃ ❸ *Prefix:* [ ${botPrefix} ]\n`;
     statusText += `┃ ❹ *Web Password:* ${webPass}\n`;
-    statusText += `┃ ❺ *Always Online:* ${getStatus(settings.alwaysOnline)}\n`; // New Field
+    statusText += `┃ ❺ *Always Online:* ${getStatus(settings.alwaysOnline)}\n`;
     statusText += `┃ ❻ *Auto Read Mg:* ${getStatus(settings.autoRead)}\n`;
     statusText += `┃ ❼ *Auto Typing:* ${getStatus(settings.autoTyping)}\n`;
     statusText += `┃ ❽ *Status Seen:* ${getStatus(settings.autoStatusSeen)}\n`;
     statusText += `┃ ❾ *Status React:* ${getStatus(settings.autoStatusReact)}\n`;
     statusText += `┃ ❿ *Read Command:* ${getStatus(settings.readCmd)}\n`;
     statusText += `┃ ⓫ *Auto Voice:* ${getStatus(settings.autoVoice)}\n`;
-    statusText += `┃ ⓬ *Auto Reply:* [ Set in web  ]\n`;
+    statusText += `┃ ⓬ *Auto Reply:* ${getStatus(settings.autoReply)} (Set in web)\n`; // Update: දැන් ON/OFF පේනවා
     statusText += `┃\n`;
     statusText += `╰━━━━━━━━━━━━━━━┈⊷\n\n`;
     statusText += `*💡 අගය වෙනස් කිරීමට Reply කරන්න:*\n`;
     statusText += `*E.g:* \`5 on\` (Always Online ON කිරීමට)\n`;
+    statusText += `*E.g:* \`12 off\` (Auto Reply OFF කිරීමට)\n`; // Example එකක් එකතු කළා
     statusText += `*E.g:* \`4 mypass123\` (Password එකක් දැමීමට)`;
 
     const sentMsg = await zanta.sendMessage(from, {
