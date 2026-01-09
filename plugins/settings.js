@@ -29,16 +29,16 @@ cmd({
 
     let statusText = `╭━━━〔 ${botName.toUpperCase()} 〕━━━┈⊷\n`;
     statusText += `┃\n`;
-    statusText += `┃ 1️⃣ *Name:* ${botName}\n`;
-    statusText += `┃ 2️⃣ *Owner:* ${ownerName}\n`;
-    statusText += `┃ 3️⃣ *Prefix:* [ ${botPrefix} ]\n`;
-    statusText += `┃ 4️⃣ *Web Password:* ${webPass}\n`;
-    statusText += `┃ 5️⃣ *Always Online:* ${getStatus(settings.alwaysOnline)}\n`; // New Field
-    statusText += `┃ 6️⃣ *Auto Read Mg:* ${getStatus(settings.autoRead)}\n`;
-    statusText += `┃ 7️⃣ *Auto Typing:* ${getStatus(settings.autoTyping)}\n`;
-    statusText += `┃ 8️⃣ *Status Seen:* ${getStatus(settings.autoStatusSeen)}\n`;
-    statusText += `┃ 9️⃣ *Status React:* ${getStatus(settings.autoStatusReact)}\n`;
-    statusText += `┃ 🔟 *Read Command:* ${getStatus(settings.readCmd)}\n`;
+    statusText += `┃ ❶ *Name:* ${botName}\n`;
+    statusText += `┃ ❷ *Owner:* ${ownerName}\n`;
+    statusText += `┃ ❸ *Prefix:* [ ${botPrefix} ]\n`;
+    statusText += `┃ ❹ *Web Password:* ${webPass}\n`;
+    statusText += `┃ ❺ *Always Online:* ${getStatus(settings.alwaysOnline)}\n`; // New Field
+    statusText += `┃ ❻ *Auto Read Mg:* ${getStatus(settings.autoRead)}\n`;
+    statusText += `┃ ❼ *Auto Typing:* ${getStatus(settings.autoTyping)}\n`;
+    statusText += `┃ ❽ *Status Seen:* ${getStatus(settings.autoStatusSeen)}\n`;
+    statusText += `┃ ❾ *Status React:* ${getStatus(settings.autoStatusReact)}\n`;
+    statusText += `┃ ❿ *Read Command:* ${getStatus(settings.readCmd)}\n`;
     statusText += `┃ ⓫ *Auto Voice:* ${getStatus(settings.autoVoice)}\n`;
     statusText += `┃\n`;
     statusText += `╰━━━━━━━━━━━━━━━┈⊷\n\n`;
