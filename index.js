@@ -114,7 +114,6 @@ async function connectToWA(sessionData) {
     
     // Initial memory load
     global.BOT_SESSIONS_CONFIG[userNumber] = await getBotSettings(userNumber);
-    let userSettings = global.BOT_SESSIONS_CONFIG[userNumber];
 
     const authPath = path.join(__dirname, `/auth_info_baileys/${userNumber}/`);
     if (!fs.existsSync(authPath)) fs.mkdirSync(authPath, { recursive: true });
@@ -130,13 +129,14 @@ async function connectToWA(sessionData) {
         auth: state,
         version,
         syncFullHistory: false,             
-        markOnlineOnConnect: userSettings.alwaysOnline === 'true',
+        markOnlineOnConnect: (global.BOT_SESSIONS_CONFIG[userNumber]?.alwaysOnline === 'true'),
         shouldSyncHistoryMessage: () => false, 
         getMessage: async (key) => { return { conversation: "ZANTA-MD" } }
     });
 
     zanta.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect } = update;
+        const currentSettings = global.BOT_SESSIONS_CONFIG[userNumber] || {};
         if (connection === "close") {
             const reason = lastDisconnect?.error?.output?.statusCode;
             const errorMsg = lastDisconnect?.error?.message || "";
@@ -155,10 +155,10 @@ async function connectToWA(sessionData) {
             console.log(`✅ [${userNumber}] Connected Successfully`);
             badMacTracker.delete(userNumber);
             const ownerJid = decodeJid(zanta.user.id);
-            if (userSettings.alwaysOnline === 'true') await zanta.sendPresenceUpdate('available', ownerJid);
+            if (currentSettings.alwaysOnline === 'true') await zanta.sendPresenceUpdate('available', ownerJid);
             await zanta.sendMessage(ownerJid, {
                 image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/alive-new.jpg?raw=true` },
-                caption: `${userSettings.botName} connected ✅`,
+                caption: `${currentSettings.botName || 'ZANTA-MD'} connected ✅`,
             });
         }
     });
@@ -169,14 +169,14 @@ async function connectToWA(sessionData) {
         const mek = messages[0];
         if (!mek || !mek.message) return;
 
-        // 🔄 Sync memory for this specific session on every message
-        userSettings = global.BOT_SESSIONS_CONFIG[userNumber];
+        // 🔄 Sync memory: මැසේජ් එකක් එන සෑම විටම අලුත්ම සෙටින්ග්ස් මෙතැනට ලැබේ
+        const userSettings = global.BOT_SESSIONS_CONFIG[userNumber] || {};
 
         const type = getContentType(mek.message);
         const from = mek.key.remoteJid;
         const isGroup = from.endsWith("@g.us");
         const body = (type === "conversation") ? mek.message.conversation : (mek.message[type]?.text || mek.message[type]?.caption || "");
-        const prefix = userSettings.prefix;
+        const prefix = userSettings.prefix || config.DEFAULT_PREFIX;
         const isCmd = body.startsWith(prefix);
         const isQuotedReply = mek.message[type]?.contextInfo?.quotedMessage;
         const sender = mek.key.fromMe ? zanta.user.id : (mek.key.participant || mek.key.remoteJid);
@@ -221,26 +221,24 @@ async function connectToWA(sessionData) {
             let dbKey = dbKeys[index];
 
             if (dbKey) {
-                // විශේෂ අවස්ථාව: index 12 (Auto Reply) - On/Off විධානයක් නැත්නම් විතරක් විස්තරය පෙන්වන්න
                 if (index === 12 && input.length === 1) {
                     let siteMsg = `📝 *ZANTA-MD AUTO REPLY SETTINGS*\n\n`;
                     siteMsg += `ඔබේ බොට් සඳහා Auto Reply මැසේජ් සෑදීමට පහත Link එකට පිවිසෙන්න.\n\n`;
                     siteMsg += `🔗 *Link:* https://chic-puppy-62f8d1.netlify.app/\n\n`;
                     siteMsg += `*💡 උපදෙස්:* \n`;
-                    siteMsg += `**Bot Settings** Tab එක වෙත ගොස් Auto Reply සකස් කරන්න.\n\n`;
+                    siteMsg += `*Bot Settings* Tab එක වෙත ගොස් Auto Reply සකස් කරන්න.\n\n`;
                     siteMsg += `*Status:* ${userSettings.autoReply === 'true' ? '✅ ON' : '❌ OFF'}\n`;
                     siteMsg += `On/Off කිරීමට \`12 on\` හෝ \`12 off\` ලෙස Reply කරන්න.\n\n`;
                     siteMsg += `> *Go to bot settings tab to set auto replies.*`;
                     return reply(siteMsg);
                 }
 
-                // සාමාන්‍ය Update Logic
                 let finalValue = (index >= 5) ? (input[1] === 'on' ? 'true' : 'false') : input.slice(1).join(" ");
                 await updateSetting(userNumber, dbKey, finalValue);
-                if (userSettings) userSettings[dbKey] = finalValue;
                 
                 // RAM sync for local updates
-                global.BOT_SESSIONS_CONFIG[userNumber] = userSettings;
+                if (!global.BOT_SESSIONS_CONFIG[userNumber]) global.BOT_SESSIONS_CONFIG[userNumber] = {};
+                global.BOT_SESSIONS_CONFIG[userNumber][dbKey] = finalValue;
 
                 if (dbKey === "alwaysOnline") {
                     await zanta.sendPresenceUpdate(finalValue === 'true' ? 'available' : 'unavailable', from);
