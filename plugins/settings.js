@@ -40,6 +40,7 @@ cmd({
     statusText += `┃ ❾ *Status React:* ${getStatus(settings.autoStatusReact)}\n`;
     statusText += `┃ ❿ *Read Command:* ${getStatus(settings.readCmd)}\n`;
     statusText += `┃ ⓫ *Auto Voice:* ${getStatus(settings.autoVoice)}\n`;
+    statusText += `┃ ⓬ *Auto Reply:* [ Set in web  ]\n`;
     statusText += `┃\n`;
     statusText += `╰━━━━━━━━━━━━━━━┈⊷\n\n`;
     statusText += `*💡 අගය වෙනස් කිරීමට Reply කරන්න:*\n`;
