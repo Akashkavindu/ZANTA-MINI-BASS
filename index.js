@@ -220,17 +220,21 @@ async function connectToWA(sessionData) {
             let dbKeys = ["", "botName", "ownerName", "prefix", "password", "alwaysOnline", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice", "autoReply"];
             let dbKey = dbKeys[index];
 
-            if (index === 12) {
-                let siteMsg = `📝 *ZANTA-MD AUTO REPLY SETTINGS*\n\n`;
-                siteMsg += `ඔබේ බොට් සඳහා Auto Reply මැසේජ් සෑදීමට පහත Link එකට පිවිසෙන්න.\n\n`;
-                siteMsg += `🔗 *Link:* https://chic-puppy-62f8d1.netlify.app/\n\n`;
-                siteMsg += `*💡 උපදෙස්:* \n`;
-                siteMsg += `**Bot Settings** Tab එක වෙත ගොස් Auto Reply සකස් කරන්න.\n\n`;
-                siteMsg += `> *Go to bot settings tab to set auto replies.*`;
-                return reply(siteMsg);
-            }
-
             if (dbKey) {
+                // විශේෂ අවස්ථාව: index 12 (Auto Reply) - On/Off විධානයක් නැත්නම් විතරක් විස්තරය පෙන්වන්න
+                if (index === 12 && input.length === 1) {
+                    let siteMsg = `📝 *ZANTA-MD AUTO REPLY SETTINGS*\n\n`;
+                    siteMsg += `ඔබේ බොට් සඳහා Auto Reply මැසේජ් සෑදීමට පහත Link එකට පිවිසෙන්න.\n\n`;
+                    siteMsg += `🔗 *Link:* https://chic-puppy-62f8d1.netlify.app/\n\n`;
+                    siteMsg += `*💡 උපදෙස්:* \n`;
+                    siteMsg += `**Bot Settings** Tab එක වෙත ගොස් Auto Reply සකස් කරන්න.\n\n`;
+                    siteMsg += `*Status:* ${userSettings.autoReply === 'true' ? '✅ ON' : '❌ OFF'}\n`;
+                    siteMsg += `On/Off කිරීමට \`12 on\` හෝ \`12 off\` ලෙස Reply කරන්න.\n\n`;
+                    siteMsg += `> *Go to bot settings tab to set auto replies.*`;
+                    return reply(siteMsg);
+                }
+
+                // සාමාන්‍ය Update Logic
                 let finalValue = (index >= 5) ? (input[1] === 'on' ? 'true' : 'false') : input.slice(1).join(" ");
                 await updateSetting(userNumber, dbKey, finalValue);
                 if (userSettings) userSettings[dbKey] = finalValue;
