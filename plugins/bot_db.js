@@ -122,5 +122,3 @@ async function getAutoReply(userNumber, text) {
 }
 
 module.exports = { connectDB, getBotSettings, updateSetting, getAutoReply, AutoReply, Settings };
-
-meka harine.
