@@ -26,7 +26,7 @@ cmd({
 👤 *නම:* Akash Kavindu
 🛠️ *ව්‍යාපෘතිය:* ZANTA-MD (WhatsApp Bot)
 🌍 *රට:* ශ්‍රී ලංකා
-🔗 *GitHub:* github.com/Akashkavindu
+🔗 *GitHub:* 🤐
 🔗 *WhatsApp:* http://wa.me/+94743404814?text=*Hey__ZANTA
 
 > *Created with ❤️ by Akash*`;
@@ -58,10 +58,6 @@ _සවිස්තරාත්මක ලැයිස්තුවට .menu ට�
 ඔබට කිසියම් ගැටළුවක් ඇත්නම් පහත ලින්ක් හරහා අපව සම්බන්ධ කරගන්න:
 
 🔗 *Official WhatsApp:* http://wa.me/+94743404814?text=*Hey__ZANTA
-
-🔗 *GitHub Support:* github.com/Akashkavindu/ZANTA_MD
-
-🔗 *WhatsApp:* http://wa.me/+94743404814?text=*Hey__ZANTA
 
 _ස්තුතියි!_`;
             return reply(contactMsg);
