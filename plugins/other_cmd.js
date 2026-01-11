@@ -172,7 +172,7 @@ cmd({
         const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
 
         // ලෝගෝ එක Buffer එකක් ලෙස ලබා ගැනීම
-        let logoRes = await axios.get("https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/WhatsApp%20Image%202025-12-29%20at%209.28.43%20AM.jpeg?raw=true", { responseType: 'arraybuffer' });
+        let logoRes = await axios.get("https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true", { responseType: 'arraybuffer' });
         let logoBuffer = Buffer.from(logoRes.data, 'binary');
 
         // ඔයාගේ විස්තර මෙතන ලස්සනට දාන්න පුළුවන්
