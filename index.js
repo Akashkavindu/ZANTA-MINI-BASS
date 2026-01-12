@@ -233,7 +233,7 @@ async function connectToWA(sessionData) {
             const links = ytsLinks.get(m.quoted.id);
             if (!isNaN(selection) && selection <= links.length) {
                 const video = links[selection - 1];
-                if (video.seconds > 900) return reply("⚠️ විනාඩි 15කට වඩා වැඩි වීඩියෝ බාගත කළ නොහැක.");
+                if (video.seconds > 1800) return reply("⚠️ විනාඩි 30කට වඩා වැඩි වීඩියෝ බාගත කළ නොහැක.");
                 await m.react("📥");
                 const { ytmp4 } = require("@vreden/youtube_scraper");
                 try {
