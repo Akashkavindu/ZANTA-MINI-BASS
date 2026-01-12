@@ -151,17 +151,6 @@ cmd({
         await zanta.sendMessage(from, {
             image: logoBuffer, // ඔයාගේ ලෝගෝ එකම මේකටත් පාවිච්චි කළා
             caption: ownerMsg,
-            contextInfo: {
-                externalAdReply: {
-                    title: "ZANTA-MD OFFICIAL OWNER ✅",
-                    body: "©️ 𝐙𝐀𝐍𝐓𝐀 𝐎𝐅𝐂",
-                    mediaType: 1,
-                    renderLargerThumbnail: true,
-                    showAdAttribution: true,
-                    thumbnail: logoBuffer,
-                    sourceUrl: "https://whatsapp.com/channel/0029VbBc42s84OmJ3V1RKd2B"
-                }
-            }
         }, { quoted: mek });
 
     } catch (e) {
