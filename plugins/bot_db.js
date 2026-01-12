@@ -39,10 +39,14 @@ async function connectDB() {
     try {
         await mongoose.connect(MONGO_URI, {
             useNewUrlParser: true,
-            useUnifiedTopology: true,
-            maxPoolSize: 5 
+            useUnifiedTopology: true,
+            maxPoolSize: 100, // ඔයා කිව්වා වගේ මේක 100 කළා
+            minPoolSize: 10,   // අඩුම ගානේ පාරවල් 10ක් හැමවෙලේම open තියනවා (Speed එක වැඩි වෙන්න)
+            socketTimeoutMS: 45000, // Connection එක එකපාරටම drop වෙන්න ඉඩ දෙන්නේ නැහැ
+            connectTimeoutMS: 30000,
+            serverSelectionTimeoutMS: 30000 
         });
-        console.log("✅ MongoDB Connected!");
+        console.log("✅ MongoDB Connected max pool!");
     } catch (error) {
         console.error("❌ MongoDB Connection Error:", error);
     }
