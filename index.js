@@ -140,6 +140,8 @@ async function connectToWA(sessionData) {
         if (connection === "close") {
             const reason = lastDisconnect?.error?.output?.statusCode;
             const errorMsg = lastDisconnect?.error?.message || "";
+
+            // ✅ මේ හරිය තමයි මම හදලා දුන්නේ
             if (errorMsg.includes("Bad MAC") || errorMsg.includes("Encryption")) {
                 let count = badMacTracker.get(userNumber) || 0;
                 count++;
@@ -152,15 +154,13 @@ async function connectToWA(sessionData) {
                 await Session.deleteOne({ number: sessionData.number });
             } else { setTimeout(() => connectToWA(sessionData), 5000); }
 
-            // --- 🛑 අවසාන කරන ලද Session එකේ Interval එක නතර කිරීම ---
             if (zanta.onlineInterval) clearInterval(zanta.onlineInterval);
 
         } else if (connection === "open") {
             console.log(`✅ [${userNumber}] Connected Successfully`);
-            badMacTracker.delete(userNumber);
+            badMacTracker.delete(userNumber); // ✅ Connect වුණාම Tracker එක reset කළා
             const ownerJid = decodeJid(zanta.user.id);
 
-            // --- 🔄 අලුතෙන් එකතු කළ ALWAYS ONLINE LOOP එක (START) ---
             if (!zanta.onlineInterval) {
                 zanta.onlineInterval = setInterval(async () => {
                     const currentSet = global.BOT_SESSIONS_CONFIG[userNumber];
@@ -169,9 +169,8 @@ async function connectToWA(sessionData) {
                     } else {
                         await zanta.sendPresenceUpdate('unavailable');
                     }
-                }, 20000); // සෑම තත්පර 10කට වරක්ම Update වේ
+                }, 20000); 
             }
-            // --- 🔄 අලුතෙන් එකතු කළ ALWAYS ONLINE LOOP එක (END) ---
 
             await zanta.sendMessage(ownerJid, {
                 image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true` },
@@ -186,7 +185,6 @@ async function connectToWA(sessionData) {
         const mek = messages[0];
         if (!mek || !mek.message) return;
 
-        // 🔄 Sync memory for this specific session on every message
         userSettings = global.BOT_SESSIONS_CONFIG[userNumber];
 
         const type = getContentType(mek.message);
@@ -209,7 +207,6 @@ async function connectToWA(sessionData) {
         const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
         
-        // --- 🤖 Auto Reply Section ---
         if (userSettings.autoReply === 'true' && userSettings.autoReplies && !isCmd && !mek.key.fromMe) {
             const chatMsg = body.toLowerCase().trim();
             const foundMatch = userSettings.autoReplies.find(ar => ar.keyword.toLowerCase().trim() === chatMsg);
@@ -239,14 +236,7 @@ async function connectToWA(sessionData) {
 
             if (dbKey) {
                 if (index === 12 && input.length === 1) {
-                    let siteMsg = `📝 *ZANTA-MD AUTO REPLY SETTINGS*\n\n`;
-                    siteMsg += `ඔබේ බොට් සඳහා Auto Reply මැසේජ් සෑදීමට පහත Link එකට පිවිසෙන්න.\n\n`;
-                    siteMsg += `🔗 *Link:* https://chic-puppy-62f8d1.netlify.app/\n\n`;
-                    siteMsg += `*💡 උපදෙස්:* \n`;
-                    siteMsg += `**Bot Settings** Tab එක වෙත ගොස් Auto Reply සකස් කරන්න.\n\n`;
-                    siteMsg += `*Status:* ${userSettings.autoReply === 'true' ? '✅ ON' : '❌ OFF'}\n`;
-                    siteMsg += `On/Off කිරීමට \`12 on\` හෝ \`12 off\` ලෙස Reply කරන්න.\n\n`;
-                    siteMsg += `> *Go to bot settings tab to set auto replies.*`;
+                    let siteMsg = `📝 *ZANTA-MD AUTO REPLY SETTINGS*\n\nඔබේ බොට් සඳහා Auto Reply මැසේජ් සෑදීමට පහත Link එකට පිවිසෙන්න.\n\n🔗 *Link:* https://chic-puppy-62f8d1.netlify.app/\n\n*💡 උපදෙස්:* \n**Bot Settings** Tab එක වෙත ගොස් Auto Reply සකස් කරන්න.\n\n*Status:* ${userSettings.autoReply === 'true' ? '✅ ON' : '❌ OFF'}\nOn/Off කිරීමට \`12 on\` හෝ \`12 off\` ලෙස Reply කරන්න.\n\n> *Go to bot settings tab to set auto replies.*`;
                     return reply(siteMsg);
                 }
 
