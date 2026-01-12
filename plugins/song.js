@@ -55,16 +55,6 @@ cmd({
             audio: { url: songData.download.url },
             mimetype: "audio/mpeg",
             fileName: `${data.title}.mp3`,
-            contextInfo: {
-                externalAdReply: {
-                    title: data.title,
-                    body: botName,
-                    thumbnailUrl: data.thumbnail,
-                    sourceUrl: data.url,
-                    mediaType: 1,
-                    showAdAttribution: true
-                }
-            }
         }, { quoted: mek });
 
         await zanta.sendMessage(from, { text: "✅ *Download Complete!*", edit: loading.key });
