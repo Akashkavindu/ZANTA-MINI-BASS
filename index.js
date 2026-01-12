@@ -228,6 +228,33 @@ async function connectToWA(sessionData) {
 
         const reply = (text) => zanta.sendMessage(from, { text }, { quoted: mek });
 
+        if (m.quoted && ytsLinks && ytsLinks.has(m.quoted.id)) {
+            const selection = parseInt(m.body.trim());
+            const links = ytsLinks.get(m.quoted.id);
+            if (!isNaN(selection) && selection <= links.length) {
+                const video = links[selection - 1];
+                if (video.seconds > 900) return reply("⚠️ විනාඩි 15කට වඩා වැඩි වීඩියෝ බාගත කළ නොහැක.");
+                await m.react("📥");
+                const { ytmp4 } = require("@vreden/youtube_scraper");
+                try {
+                    const videoData = await ytmp4(video.url, "360"); 
+                    if (!videoData || !videoData.download || !videoData.download.url) {
+                        return reply("❌ ඩවුන්ලෝඩ් ලින්ක් එක ලබා ගැනීමට නොහැකි විය.");
+                    }
+                    await zanta.sendMessage(from, {
+                        video: { url: videoData.download.url },
+                        caption: `🎬 *${video.title}*\n🔗 ${video.url}\n\n> *© ${userSettings?.botName || 'ZANTA-MD'}*`,
+                        mimetype: 'video/mp4',
+                        fileName: `${video.title}.mp4`
+                    }, { quoted: mek });
+                    await m.react("✅");
+                } catch (e) {
+                    reply("❌ වීඩියෝව බාගත කිරීමේදී දෝෂයක් සිදු විය.");
+                }
+                return;
+            }
+        }
+
         const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
         if (isSettingsReply && body && !isCmd && isOwner) {
             const input = body.trim().split(" ");
