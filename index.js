@@ -230,31 +230,59 @@ async function connectToWA(sessionData) {
         const reply = (text) => zanta.sendMessage(from, { text }, { quoted: mek });
 
        if (m.quoted && ytsLinks && ytsLinks.has(m.quoted.id)) {
-            const selection = parseInt(m.body.trim());
-            const links = ytsLinks.get(m.quoted.id);
-            if (!isNaN(selection) && selection <= links.length) {
-                const video = links[selection - 1];
-                if (video.seconds > 900) return reply("⚠️ විනාඩි 15කට වඩා වැඩි වීඩියෝ බාගත කළ නොහැක.");
-                await m.react("📥");
-                const { ytmp4 } = require("@vreden/youtube_scraper");
-                try {
-                    const videoData = await ytmp4(video.url, "360"); 
-                    if (!videoData || !videoData.download || !videoData.download.url) {
-                        return reply("❌ ඩවුන්ලෝඩ් ලින්ක් එක ලබා ගැනීමට නොහැකි විය.");
-                    }
-                    await zanta.sendMessage(from, {
-                        video: { url: videoData.download.url },
-                        caption: `🎬 *${video.title}*\n🔗 ${video.url}\n\n> *© ${userSettings?.botName || 'ZANTA-MD'}*`,
-                        mimetype: 'video/mp4',
-                        fileName: `${video.title}.mp4`
-                    }, { quoted: mek });
-                    await m.react("✅");
-                } catch (e) {
-                    reply("❌ වීඩියෝව බාගත කිරීමේදී දෝෂයක් සිදු විය.");
-                }
-                return;
-            }
+    const selection = parseInt(m.body.trim());
+    const links = ytsLinks.get(m.quoted.id);
+
+    if (!isNaN(selection) && selection > 0 && selection <= links.length) {
+        const video = links[selection - 1];
+
+        // විනාඩි 15 සීමාව පරීක්ෂාව
+        // (සටහන: සර්ච් රිසල්ට් එකේ duration එක තත්පර වලින් නැත්නම් මේක skip කරන්න පුළුවන්)
+        if (video.seconds > 900) return reply("⚠️ විනාඩි 15කට වඩා වැඩි වීඩියෝ බාගත කළ නොහැක.");
+
+        await m.react("📥");
+        
+        const ytdl = require("@distube/ytdl-core");
+        const fs = require("fs-extra");
+
+        try {
+            // තාවකාලික file එකක් සෑදීම
+            const videoPath = `./${Date.now()}.mp4`;
+
+            // YTDL හරහා වීඩියෝව බාගැනීම (360p හෝ ඊට ආසන්න හොඳම quality එක)
+            const download = ytdl(video.url, {
+                quality: 'highest',
+                filter: format => format.container === 'mp4' && format.hasAudio && format.hasVideo
+            }).pipe(fs.createWriteStream(videoPath));
+
+            download.on('finish', async () => {
+                // වීඩියෝව WhatsApp වෙත යැවීම
+                await zanta.sendMessage(from, {
+                    video: { url: videoPath },
+                    caption: `🎬 *${video.title}*\n🔗 ${video.url}\n\n> *© ${userSettings?.botName || 'ZANTA-MD'}*`,
+                    mimetype: 'video/mp4',
+                    fileName: `${video.title}.mp4`
+                }, { quoted: mek });
+
+                await m.react("✅");
+
+                // යැවූ පසු VPS එකෙන් මකා දැමීම
+                if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+            });
+
+            download.on('error', (err) => {
+                console.error(err);
+                reply("❌ වීඩියෝව බාගත කිරීමේදී දෝෂයක් සිදු විය.");
+                if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+            });
+
+        } catch (e) {
+            console.error(e);
+            reply("❌ පද්ධතියේ දෝෂයක් සිදු විය.");
         }
+        return;
+    }
+}
 
         const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
         if (isSettingsReply && body && !isCmd && isOwner) {
