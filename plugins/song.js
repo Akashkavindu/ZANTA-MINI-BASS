@@ -1,8 +1,9 @@
 const { cmd } = require("../command");
 const yts = require("yt-search");
-const { ytmp3 } = require("@vreden/youtube_scraper");
 const config = require("../config");
 const axios = require("axios");
+
+// වැදගත්: "@vreden/youtube_scraper" දැන් අවශ්‍ය නැත. එය ඉවත් කරන ලදී.
 
 cmd({
     pattern: "song",
@@ -43,8 +44,7 @@ cmd({
             caption: stylishDesc
         }, { quoted: mek });
 
-        // Download Audio Using API
-        // මම මෙතනට පාවිච්චි කරන්නේ ස්ථාවර API එකක්
+        // Download Audio Using API (Stable Method)
         const apiUrl = `https://dark-ytdl-2.vercel.app/download?url=${encodeURIComponent(data.url)}&type=mp3&quality=128`;
         const res = await axios.get(apiUrl);
         const download = res.data;
@@ -65,7 +65,6 @@ cmd({
 
     } catch (e) {
         console.error(e);
-        // Reply Error message to user
         if (m) {
             await zanta.sendMessage(from, { text: `❌ *Error:* ${e.message}` });
         }
@@ -100,8 +99,8 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
         const data = search.videos[0];
         if (!data) return reply("❌ සින්දුව සොයාගත නොහැකි විය.");
 
-        if (data.seconds > 2400) { 
-            return reply(`⚠️ *සින්දුව ගොඩක් දිග වැඩියි!* (Max: 40 Mins)`);
+        if (data.seconds > 3600) { 
+            return reply(`⚠️ *සින්දුව ගොඩක් දිග වැඩියි!* (Max: 60 Mins)`);
         }
 
         const response = await axios.get(data.thumbnail, { responseType: 'arraybuffer' });
@@ -121,20 +120,24 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
 
         await m.react("📥");
 
-        const songData = await ytmp3(data.url, "128");
-        if (!songData || !songData.download || !songData.download.url) {
-            return reply("❌ Download error.");
+        // GSONG එකටත් අලුත් වැඩ කරන API එකම දැම්මා
+        const apiUrl = `https://dark-ytdl-2.vercel.app/download?url=${encodeURIComponent(data.url)}&type=mp3&quality=128`;
+        const res = await axios.get(apiUrl);
+        const download = res.data;
+
+        if (!download || !download.status || !download.result.download_url) {
+            return reply("❌ Download error (API down).");
         }
 
         await zanta.sendMessage(targetJid, { 
-            audio: { url: songData.download.url }, 
+            audio: { url: download.result.download_url }, 
             mimetype: 'audio/mpeg', 
             ptt: false, 
             fileName: `${data.title}.mp3`
         }, { quoted: null });
 
         await m.react("✅");
-        await reply(`🚀 *Successfully Shared!*`);
+        await reply(`🚀 *Successfully Shared to ${targetJid}!*`);
 
     } catch (e) {
         console.error("GSong Error:", e);
