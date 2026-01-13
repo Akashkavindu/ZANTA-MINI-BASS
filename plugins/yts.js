@@ -58,6 +58,3 @@ cmd({
 
 
 module.exports = { ytsLinks };
-
-
-aya meka thiyenava?
