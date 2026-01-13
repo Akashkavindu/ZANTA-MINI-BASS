@@ -3,8 +3,9 @@ const yts = require("yt-search");
 const config = require("../config");
 const axios = require("axios");
 
-// වැදගත්: "@vreden/youtube_scraper" දැන් අවශ්‍ය නැත. එය ඉවත් කරන ලදී.
-
+// ---------------------------------------------------------------------------
+// SONG COMMAND (For Inbox/Groups)
+// ---------------------------------------------------------------------------
 cmd({
     pattern: "song",
     react: "🎶",
@@ -38,18 +39,18 @@ cmd({
 
 > *©️ ${botName.toUpperCase()}*`;
 
-        // Thumbnail UI
+        // Thumbnail UI Send
         await zanta.sendMessage(from, { 
             image: { url: data.thumbnail }, 
             caption: stylishDesc
         }, { quoted: mek });
 
-        // Download Audio Using API (Stable Method)
+        // Download Audio Using Stable API
         const apiUrl = `https://dark-ytdl-2.vercel.app/download?url=${encodeURIComponent(data.url)}&type=mp3&quality=128`;
         const res = await axios.get(apiUrl);
         const download = res.data;
 
-        if (!download || !download.status || !download.result.download_url) {
+        if (!download || !download.status || !download.result || !download.result.download_url) {
             return await zanta.sendMessage(from, { text: "❌ *ඩවුන්ලෝඩ් ලින්ක් එක ලබා ගැනීමට නොහැක. කරුණාකර නැවත උත්සාහ කරන්න.*", edit: loading.key });
         }
 
@@ -64,14 +65,16 @@ cmd({
         await m.react("✅");
 
     } catch (e) {
-        console.error(e);
+        console.error("Song Error:", e);
         if (m) {
             await zanta.sendMessage(from, { text: `❌ *Error:* ${e.message}` });
         }
     }
 });
 
-
+// ---------------------------------------------------------------------------
+// GSONG COMMAND (Send to specific Groups)
+// ---------------------------------------------------------------------------
 cmd({
     pattern: "gsong",
     desc: "Send song to groups (Simple Mode)",
@@ -103,6 +106,7 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
             return reply(`⚠️ *සින්දුව ගොඩක් දිග වැඩියි!* (Max: 60 Mins)`);
         }
 
+        // Get Thumbnail Buffer
         const response = await axios.get(data.thumbnail, { responseType: 'arraybuffer' });
         const imgBuffer = Buffer.from(response.data, 'binary');
 
@@ -113,6 +117,7 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
                              `   ${timeLine}\n` +
                              `   ⇆ㅤㅤ◁ㅤ❚❚ㅤ▷ㅤ↻`;
 
+        // Send Details to Target Group
         await zanta.sendMessage(targetJid, { 
             image: imgBuffer, 
             caption: imageCaption 
@@ -120,15 +125,16 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
 
         await m.react("📥");
 
-        // GSONG එකටත් අලුත් වැඩ කරන API එකම දැම්මා
+        // Download Audio Using Stable API
         const apiUrl = `https://dark-ytdl-2.vercel.app/download?url=${encodeURIComponent(data.url)}&type=mp3&quality=128`;
         const res = await axios.get(apiUrl);
         const download = res.data;
 
-        if (!download || !download.status || !download.result.download_url) {
+        if (!download || !download.status || !download.result || !download.result.download_url) {
             return reply("❌ Download error (API down).");
         }
 
+        // Send Audio to Target Group
         await zanta.sendMessage(targetJid, { 
             audio: { url: download.result.download_url }, 
             mimetype: 'audio/mpeg', 
@@ -137,7 +143,7 @@ async (zanta, mek, m, { from, q, reply, isOwner, userSettings }) => {
         }, { quoted: null });
 
         await m.react("✅");
-        await reply(`🚀 *Successfully Shared to ${targetJid}!*`);
+        await reply(`🚀 *Successfully Shared to Group!*`);
 
     } catch (e) {
         console.error("GSong Error:", e);
