@@ -9,7 +9,7 @@ const axios = require("axios");
 cmd({
     pattern: "song",
     react: "🎶",
-    desc: "Download MP3 Songs with full details UI.",
+    desc: "Download MP3 Songs.",
     category: "download",
     filename: __filename,
 }, async (zanta, mek, m, { from, reply, q, userSettings }) => {
@@ -25,38 +25,36 @@ cmd({
         const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
         const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
 
-        if (data.seconds > 3600) {
-            return await zanta.sendMessage(from, { text: "⏳ *විනාඩි 60 ට වැඩි Audio දැනට සහය නොදක්වයි.*", edit: loading.key });
-        }
-
         let stylishDesc = `🎶 *|${botName.toUpperCase()} SONG PLAYER|* 🎶
         
 🎬 *Title:* ${data.title}
 ⏱️ *Duration:* ${data.timestamp}
 👤 *Author:* ${data.author.name}
-📅 *Uploaded:* ${data.ago}
-👀 *Views:* ${data.views.toLocaleString()}
 
 > *©️ ${botName.toUpperCase()}*`;
 
-        // Thumbnail UI Send
-        await zanta.sendMessage(from, { 
-            image: { url: data.thumbnail }, 
-            caption: stylishDesc
-        }, { quoted: mek });
+        // Thumbnail එක 404 නොවී ස්ථාවරව යැවීමට මෙතන වෙනස් කළා
+        try {
+            await zanta.sendMessage(from, { 
+                image: { url: data.thumbnail }, 
+                caption: stylishDesc
+            }, { quoted: mek });
+        } catch (imgErr) {
+            // Thumbnail එකේ අවුලක් ආවොත් මැසේජ් එක විතරක් යවනවා
+            await zanta.sendMessage(from, { text: stylishDesc }, { quoted: mek });
+        }
 
-        // Download Audio Using Stable API
+        // Download Audio Using API
         const apiUrl = `https://dark-ytdl-2.vercel.app/download?url=${encodeURIComponent(data.url)}&type=mp3&quality=128`;
         const res = await axios.get(apiUrl);
-        const download = res.data;
-
-        if (!download || !download.status || !download.result || !download.result.download_url) {
-            return await zanta.sendMessage(from, { text: "❌ *ඩවුන්ලෝඩ් ලින්ක් එක ලබා ගැනීමට නොහැක. කරුණාකර නැවත උත්සාහ කරන්න.*", edit: loading.key });
+        
+        if (!res.data || !res.data.status || !res.data.result.download_url) {
+             return await zanta.sendMessage(from, { text: "❌ *සින්දුව ලබා ගැනීමට නොහැකි විය. වෙනත් සින්දුවක් උත්සාහ කරන්න.*", edit: loading.key });
         }
 
         // Send Audio File
         await zanta.sendMessage(from, {
-            audio: { url: download.result.download_url },
+            audio: { url: res.data.result.download_url },
             mimetype: "audio/mpeg",
             fileName: `${data.title}.mp3`,
         }, { quoted: mek });
@@ -65,13 +63,10 @@ cmd({
         await m.react("✅");
 
     } catch (e) {
-        console.error("Song Error:", e);
-        if (m) {
-            await zanta.sendMessage(from, { text: `❌ *Error:* ${e.message}` });
-        }
+        console.error("Error in song command:", e);
+        reply(`❌ *Error:* ${e.message}`);
     }
 });
-
 // ---------------------------------------------------------------------------
 // GSONG COMMAND (Send to specific Groups)
 // ---------------------------------------------------------------------------
