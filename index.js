@@ -22,14 +22,13 @@ const { commands, replyHandlers } = require("./command");
 
 const { lastMenuMessage } = require("./plugins/menu");
 const { lastSettingsMessage } = require("./plugins/settings"); 
-const { lastHelpMessage } = require("./plugins/help"); 
-const { ytsLinks } = require("./plugins/yts"); 
+const { lastHelpMessage } = require("./plugins/help");
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
 // --- 🛡️ Bad MAC Tracker ---
 const badMacTracker = new Map();
 
-// --- 🔌 Active Sockets Tracker (Restart එකට අවශ්‍යයි) ---
+// --- 🔌 Active Sockets Tracker ---
 const activeSockets = new Set();
 
 // --- 🧠 Global Storage for Memory Sync ---
@@ -42,6 +41,7 @@ const SessionSchema = new mongoose.Schema({
 }, { collection: 'sessions' });
 const Session = mongoose.models.Session || mongoose.model("Session", SessionSchema);
 
+// 🛠️ පිරිසිදු JID එකක් ලබා ගැනීමට (Fixes LID and Suffix issues)
 const decodeJid = (jid) => {
     if (!jid) return jid;
     if (/:\d+@/gi.test(jid)) {
@@ -135,13 +135,12 @@ async function connectToWA(sessionData) {
         getMessage: async (key) => { return { conversation: "ZANTA-MD" } }
     });
 
-    // ලිස්ට් එකට දාගන්නවා Restart එකට ඕන නිසා
     activeSockets.add(zanta);
 
     zanta.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === "close") {
-            activeSockets.delete(zanta); // අයින් කරනවා Connection එක වැහුණම
+            activeSockets.delete(zanta);
             const reason = lastDisconnect?.error?.output?.statusCode;
             const errorMsg = lastDisconnect?.error?.message || "";
 
@@ -175,10 +174,13 @@ async function connectToWA(sessionData) {
                 }, 20000); 
             }
 
-            await zanta.sendMessage(ownerJid, {
-                image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true` },
-                caption: `${userSettings.botName} connected ✅`,
-            });
+            // --- 🛠️ MODIFIED: CONNECTION MESSAGE ON/OFF CHECK ---
+            if (userSettings.connectionMsg === 'true') {
+                await zanta.sendMessage(ownerJid, {
+                    image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true` },
+                    caption: `${userSettings.botName} connected ✅`,
+                });
+            }
         }
     });
 
@@ -209,7 +211,29 @@ async function connectToWA(sessionData) {
 
         const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
-        
+
+        // --- 🛠️ MODIFIED: SAFE ADMIN CHECK LOGIC ---
+        let groupMetadata = {};
+        let participants = [];
+        let groupAdmins = []; 
+        let isAdmins = false;
+        let isBotAdmins = false;
+
+        if (isGroup) {
+            try {
+                groupMetadata = await zanta.groupMetadata(from).catch(e => ({}));
+                participants = groupMetadata.participants || [];
+                groupAdmins = getGroupAdmins(participants); 
+                const cleanSender = decodeJid(sender);
+                const cleanBot = decodeJid(zanta.user.id);
+                const cleanAdmins = groupAdmins.map(v => decodeJid(v));
+                isAdmins = cleanAdmins.includes(cleanSender);
+                isBotAdmins = cleanAdmins.includes(cleanBot);
+            } catch (e) {
+                console.log("Error Fetching Group Metadata: ", e);
+            }
+        }
+
         if (userSettings.autoReply === 'true' && userSettings.autoReplies && !isCmd && !mek.key.fromMe) {
             const chatMsg = body.toLowerCase().trim();
             const foundMatch = userSettings.autoReplies.find(ar => ar.keyword.toLowerCase().trim() === chatMsg);
@@ -229,39 +253,12 @@ async function connectToWA(sessionData) {
 
         const reply = (text) => zanta.sendMessage(from, { text }, { quoted: mek });
 
-       // --- VIDEO REPLY HANDLER (YT-DLP MODE) ---
-if (m.quoted && ytsLinks && ytsLinks.has(m.quoted.id)) {
-            const selection = parseInt(m.body.trim());
-            const links = ytsLinks.get(m.quoted.id);
-            if (!isNaN(selection) && selection <= links.length) {
-                const video = links[selection - 1];
-                if (video.seconds > 1800) return reply("⚠️ විනාඩි 30කට වඩා වැඩි වීඩියෝ බාගත කළ නොහැක.");
-                await m.react("📥");
-                const { ytmp4 } = require("@vreden/youtube_scraper");
-                try {
-                    const videoData = await ytmp4(video.url, "360"); 
-                    if (!videoData || !videoData.download || !videoData.download.url) {
-                        return reply("❌ ඩවුන්ලෝඩ් ලින්ක් එක ලබා ගැනීමට නොහැකි විය.");
-                    }
-                    await zanta.sendMessage(from, {
-                        video: { url: videoData.download.url },
-                        caption: `🎬 *${video.title}*\n🔗 ${video.url}\n\n> *© ${userSettings?.botName || 'ZANTA-MD'}*`,
-                        mimetype: 'video/mp4',
-                        fileName: `${video.title}.mp4`
-                    }, { quoted: mek });
-                    await m.react("✅");
-                } catch (e) {
-                    reply("❌ වීඩියෝව බාගත කිරීමේදී දෝෂයක් සිදු විය.");
-                }
-                return;
-            }
-        }
-
         const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
         if (isSettingsReply && body && !isCmd && isOwner) {
             const input = body.trim().split(" ");
             let index = parseInt(input[0]);
-            let dbKeys = ["", "botName", "ownerName", "prefix", "password", "alwaysOnline", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice", "autoReply"];
+            // 🛠️ MODIFIED: Added connectionMsg to dbKeys (Index 13)
+            let dbKeys = ["", "botName", "ownerName", "prefix", "password", "alwaysOnline", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice", "autoReply", "connectionMsg"];
             let dbKey = dbKeys[index];
 
             if (dbKey) {
@@ -302,7 +299,8 @@ if (m.quoted && ytsLinks && ytsLinks.has(m.quoted.id)) {
                 try {
                     await cmd.function(zanta, mek, m, {
                         from, body, isCmd, command: execName, args: execArgs, q: execArgs.join(" "),
-                        isGroup, sender, senderNumber, isOwner, reply, prefix, userSettings 
+                        isGroup, sender, senderNumber, isOwner, reply, prefix, userSettings,
+                        groupMetadata, participants, groupAdmins, isAdmins, isBotAdmins 
                     });
                 } catch (e) { console.error(e); }
             }
@@ -319,12 +317,11 @@ setTimeout(async () => {
     console.log("♻️ [RESTART] Cleaning up active connections...");
     for (const socket of activeSockets) {
         try {
-            await socket.end(); // WhatsApp Server එකට Disconnect සිග්නල් එක යවනවා
+            await socket.end(); 
         } catch (e) {}
     }
-    // තත්පර 5ක් පද්ධතිය නිදහස් වෙන්න දීලා Exit වෙනවා
     setTimeout(() => {
         console.log("🚀 Exiting for scheduled restart.");
         process.exit(0);
     }, 5000);
-}, 60 * 60 * 1000); // හැම පැයකටම වරක්
+}, 60 * 60 * 1000);
