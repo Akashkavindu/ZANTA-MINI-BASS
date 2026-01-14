@@ -99,7 +99,7 @@ async (zanta, mek, m, { from, reply, args, userSettings }) => {
 
             groupedCommands[selectedCategory].forEach((c) => {
                 // අංක වෙනුවට Technical Bullet Point එකක් පාවිච්චි කරමු
-                commandList += `┃ ◈ ⚡️ ${finalPrefix}${c.pattern}\n`;
+                commandList += `┃ ◈ ⚡ ${finalPrefix}${c.pattern}\n`;
             });
 
             commandList += `╰━━━━━━━━━━━━━━┈⊷\n\n`;
@@ -154,5 +154,6 @@ async (zanta, mek, m, { from, reply, args, userSettings }) => {
 });
 
 module.exports = { lastMenuMessage };
+
 
 
