@@ -291,21 +291,23 @@ async function connectToWA(sessionData) {
 
         // --- 🎬 🆕 MOVIE REPLY HANDLER ADDED HERE BY GEMINI ---
         const { pendingSearch, pendingQuality } = require("./plugins/movie");
-        const isMovieReply = (pendingSearch && pendingSearch[sender]) || (pendingQuality && pendingQuality[sender]);
 
-        if (isMovieReply && body && !isCmd) {
-            const movieCmd = commands.find(c => c.pattern === 'movie' || (c.alias && c.alias.includes('movie')));
-            if (movieCmd) {
-                try {
-                    await movieCmd.function(zanta, mek, m, {
-                        from, body, isCmd: false, command: 'movie', args: [body.trim()], q: body.trim(),
-                        isGroup, sender, senderNumber, isOwner, reply, prefix, userSettings,
-                        groupMetadata, participants, groupAdmins, isAdmins, isBotAdmins 
-                    });
-                    return; // Stop further execution for this message
-                } catch (e) { console.error("Movie Reply Error:", e); }
-            }
-        }
+// එවපු මැසේජ් එක අංකයක්ද සහ pending ලිස්ට් එකේ ඉන්නවද කියලා බලනවා
+const isMovieReply = (body && !isNaN(body.trim())) && ((pendingSearch && pendingSearch[sender]) || (pendingQuality && pendingQuality[sender]));
+
+if (isMovieReply && !isCmd) {
+    const movieCmd = commands.find(c => c.pattern === 'movie' || (c.alias && c.alias.includes('movie')));
+    if (movieCmd) {
+        try {
+            await movieCmd.function(zanta, mek, m, {
+                from, body, isCmd: false, command: 'movie', args: [body.trim()], q: body.trim(),
+                isGroup, sender, senderNumber, isOwner, reply, prefix, userSettings,
+                groupMetadata, participants, groupAdmins, isAdmins, isBotAdmins 
+            });
+            return; // අංකයක් නම් විතරක් මූවී එකට යවනවා, නැත්නම් සාමාන්‍ය විදිහට වැඩ
+        } catch (e) { console.error("Movie Reply Error:", e); }
+    }
+}
         // --- 🎬 END OF MOVIE REPLY HANDLER ---
 
         if (isCmd || isMenuReply || isHelpReply) {
