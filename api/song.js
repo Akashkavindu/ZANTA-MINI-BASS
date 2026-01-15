@@ -9,58 +9,43 @@ async function getAudioFile(url) {
     const filePath = path.join(tempDir, fileName);
 
     try {
-        console.log("📡 Connecting to Cobalt API for:", url);
+        console.log("🚀 Trying Premium Scraper for:", url);
 
-        // Cobalt API එකට Request එක යවනවා
-        const res = await axios.post('https://api.cobalt.tools/api/json', {
-            url: url,
-            downloadMode: 'audio',
-            audioFormat: 'mp3',
-            filenamePattern: 'basic'
-        }, {
-            headers: {
-                'accept': 'application/json',
-                'content-type': 'application/json'
-            }
-        });
+        // මේක දැනට තියෙන stable ම API එකක් (Aura API)
+        const response = await axios.get(`https://aura-api-ix68.onrender.com/api/ytdl?url=${encodeURIComponent(url)}`);
+        
+        const dlUrl = response.data?.data?.mp3 || response.data?.mp3;
 
-        if (res.data && res.data.url) {
-            console.log("📥 API Success! Downloading file to VPS...");
-            
-            const response = await axios({
-                url: res.data.url,
+        if (dlUrl) {
+            console.log("📥 Scraper Success! Downloading...");
+            const writer = fs.createWriteStream(filePath);
+            const stream = await axios({
+                url: dlUrl,
                 method: 'GET',
                 responseType: 'stream'
             });
 
-            const writer = fs.createWriteStream(filePath);
-            response.data.pipe(writer);
+            stream.data.pipe(writer);
 
-            return new Promise((resolve, reject) => {
+            return new Promise((resolve) => {
                 writer.on('finish', () => {
-                    if (fs.existsSync(filePath) && fs.statSync(filePath).size > 100) {
-                        console.log("✅ Audio Downloaded Successfully!");
-                        resolve({ status: true, filePath: filePath });
-                    } else {
-                        resolve({ status: false, error: "Empty file from API" });
-                    }
+                    console.log("✅ File Saved!");
+                    resolve({ status: true, filePath: filePath });
                 });
-                writer.on('error', reject);
+                writer.on('error', () => resolve({ status: false }));
             });
         } else {
-            throw new Error("API did not return a download URL");
+            throw new Error("No link found");
         }
-
     } catch (e) {
-        console.error("❌ Cobalt API Error:", e.message);
-        // මෙතනදී Fallback එකක් විදිහට තව එක API එකක් බලනවා
+        console.log("⚠️ Scraper 1 failed, trying Final Bypass...");
         try {
-            console.log("🔄 Trying Backup API...");
-            const res2 = await axios.get(`https://api.vreden.my.id/api/ytdl?url=${encodeURIComponent(url)}`);
-            const dlUrl = res2.data?.result?.mp3 || res2.data?.result?.downloadUrl;
-            
-            if (dlUrl) {
-                const response = await axios({ url: dlUrl, method: 'GET', responseType: 'stream' });
+            // මේක තවත් bypass API එකක්
+            const res2 = await axios.get(`https://api.zenkey.my.id/api/download/ytmp3?url=${encodeURIComponent(url)}&apikey=zenkey`);
+            const dlUrl2 = res2.data?.result?.download_url || res2.data?.result?.url;
+
+            if (dlUrl2) {
+                const response = await axios({ url: dlUrl2, method: 'GET', responseType: 'stream' });
                 const writer = fs.createWriteStream(filePath);
                 response.data.pipe(writer);
                 return new Promise((resolve) => {
@@ -69,32 +54,25 @@ async function getAudioFile(url) {
                 });
             }
         } catch (err) {
-            return { status: false, error: "All APIs failed." };
+            return { status: false, error: "All methods failed." };
         }
-        return { status: false, error: e.message };
     }
 }
 
 async function getVideoFile(url) {
+    // වීඩියෝ එකටත් ඒ වගේම stable API එකක් දාමු
     const fileName = `temp_vid_${Date.now()}.mp4`;
     const tempDir = path.join(__dirname, '..', 'temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     const filePath = path.join(tempDir, fileName);
 
     try {
-        const res = await axios.post('https://api.cobalt.tools/api/json', {
-            url: url,
-            downloadMode: 'video',
-            videoQuality: '720',
-            filenamePattern: 'basic'
-        }, {
-            headers: { 'accept': 'application/json', 'content-type': 'application/json' }
-        });
-
-        if (res.data && res.data.url) {
-            const response = await axios({ url: res.data.url, method: 'GET', responseType: 'stream' });
+        const response = await axios.get(`https://aura-api-ix68.onrender.com/api/ytdl?url=${encodeURIComponent(url)}`);
+        const dlUrl = response.data?.data?.mp4 || response.data?.mp4;
+        if (dlUrl) {
+            const res = await axios({ url: dlUrl, method: 'GET', responseType: 'stream' });
             const writer = fs.createWriteStream(filePath);
-            response.data.pipe(writer);
+            res.data.pipe(writer);
             return new Promise((resolve) => {
                 writer.on('finish', () => resolve({ status: true, filePath: filePath }));
                 writer.on('error', () => resolve({ status: false }));
