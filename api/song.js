@@ -1,76 +1,69 @@
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const path = require('path');
+const axios = require('axios');
 const fs = require('fs');
-const execPromise = promisify(exec);
+const path = require('path');
 
-/**
- * YouTube Audio Downloader with Cookie Support
- */
 async function getAudioFile(url) {
     const fileName = `temp_${Date.now()}.mp3`;
     const tempDir = path.join(__dirname, '..', 'temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     const filePath = path.join(tempDir, fileName);
-    
-    // Netscape format cookies.txt එක ප්‍රධාන folder එකේ තිබිය යුතුයි
-    const cookiePath = path.join(__dirname, '..', 'cookies.txt');
 
-    try {
-        console.log("🚀 Starting Audio Download with Cookies...");
+    // දැනට වැඩ කරන සුපිරිම API 2ක්
+    const apis = [
+        `https://widipe.com/download/ytdl?url=${encodeURIComponent(url)}`,
+        `https://api.sipendl.com/api/v1/yt/download?url=${encodeURIComponent(url)}&type=mp3`
+    ];
 
-        // Signature solving issues මගහරවා ගැනීමට අලුත් පරාමිතීන් එකතු කර ඇත
-        let cmd = `yt-dlp --cookies "${cookiePath}" \
---force-ipv4 --no-check-certificates \
---extract-audio --audio-format mp3 --audio-quality 0 \
---no-warnings --ignore-errors \
-"${url}" -o "${filePath}"`;
+    console.log("🚀 Trying Direct APIs...");
 
-        await execPromise(cmd);
+    for (let apiUrl of apis) {
+        try {
+            const res = await axios.get(apiUrl, { timeout: 10000 });
+            
+            // විවිධ API වල ප්‍රතිඵල එන විදිහට අනුව URL එක ගන්නවා
+            let dlUrl = res.data?.result?.url || res.data?.result?.downloadUrl;
 
-        if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) {
-            console.log("✅ Audio Download Success!");
-            return { status: true, filePath: filePath };
-        } else {
-            throw new Error("බාගත කළ ගොනුව හිස් (Empty File).");
+            if (dlUrl) {
+                console.log("📥 API Success! Downloading to VPS...");
+                const response = await axios({ url: dlUrl, method: 'GET', responseType: 'stream' });
+                const writer = fs.createWriteStream(filePath);
+                response.data.pipe(writer);
+
+                return new Promise((resolve) => {
+                    writer.on('finish', () => resolve({ status: true, filePath: filePath }));
+                    writer.on('error', () => resolve({ status: false }));
+                });
+            }
+        } catch (e) {
+            console.log("⚠️ API Skip...");
+            continue;
         }
-
-    } catch (e) {
-        console.error("YT-DLP Audio Error:", e.message);
-        return { status: false, error: "සින්දුව බාගත කිරීම අසාර්ථකයි. Cookies හෝ YT-DLP update කරන්න." };
     }
+    return { status: false, error: "සියලුම සේවා බිඳ වැටී ඇත." };
 }
 
-/**
- * YouTube Video Downloader with Cookie Support
- */
+// Video එකටත් මේ විදිහටම API එක දාමු
 async function getVideoFile(url) {
     const fileName = `temp_vid_${Date.now()}.mp4`;
     const tempDir = path.join(__dirname, '..', 'temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     const filePath = path.join(tempDir, fileName);
-    const cookiePath = path.join(__dirname, '..', 'cookies.txt');
 
     try {
-        console.log("🚀 Starting Video Download with Cookies...");
+        const res = await axios.get(`https://widipe.com/download/ytdl?url=${encodeURIComponent(url)}`);
+        const dlUrl = res.data?.result?.url; // Video URL එක
 
-        let cmd = `yt-dlp --cookies "${cookiePath}" \
---force-ipv4 --no-check-certificates \
--f "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]/best" \
---recode-video mp4 --no-warnings \
-"${url}" -o "${filePath}"`;
-            
-        await execPromise(cmd);
-
-        if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) {
-            console.log("✅ Video Download Success!");
-            return { status: true, filePath: filePath };
-        } else {
-            throw new Error("වීඩියෝ ගොනුව හිස් (Empty File).");
+        if (dlUrl) {
+            const response = await axios({ url: dlUrl, method: 'GET', responseType: 'stream' });
+            const writer = fs.createWriteStream(filePath);
+            response.data.pipe(writer);
+            return new Promise((resolve) => {
+                writer.on('finish', () => resolve({ status: true, filePath: filePath }));
+                writer.on('error', () => resolve({ status: false }));
+            });
         }
     } catch (e) {
-        console.error("YT-DLP Video Error:", e.message);
-        return { status: false, error: e.message };
+        return { status: false };
     }
 }
 
