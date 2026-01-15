@@ -17,8 +17,8 @@ async function getYoutube(query) {
 // --- SONG DOWNLOADER (MP3) ---
 cmd({
     pattern: "song",
-    alias: ["yta", "ytmp3"],
-    desc: "Download MP3 with a premium look",
+    alias: ["yta", "ytmp3", "gsong"],
+    desc: "Download MP3 with Hybrid Fallback",
     category: "download",
     filename: __filename,
 },
@@ -30,32 +30,29 @@ async (bot, mek, m, { from, q, reply }) => {
         const video = await getYoutube(q);
         if (!video) return reply("❌ *ප්‍රතිඵල හමු නොවීය.*");
 
-        const caption = `
-✨ *ᴢᴀɴᴛᴀ-ᴍᴅ sᴏɴɢ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ* ✨
-
-📝 *ᴛɪᴛʟᴇ:* ${video.title}
-👤 *ᴀᴜᴛʜᴏʀ:* ${video.author.name}
-🕒 *ᴅᴜʀᴀᴛɪᴏɴ:* ${video.timestamp}
-🔗 *ʟɪɴᴋ:* ${video.url}
-
-> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴢᴀɴᴛᴀ-ᴍᴅ*`;
+        const caption = `✨ *ᴢᴀɴᴛᴀ-ᴍᴅ sᴏɴɢ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ* ✨\n\n📝 *ᴛɪᴛʟᴇ:* ${video.title}\n👤 *ᴀᴜᴛʜᴏʀ:* ${video.author.name}\n🕒 *ᴅᴜʀᴀᴛɪᴏɴ:* ${video.timestamp}\n🔗 *ʟɪɴᴋ:* ${video.url}\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴢᴀɴᴛᴀ-ᴍᴅ*`;
 
         await bot.sendMessage(from, { image: { url: video.thumbnail }, caption }, { quoted: mek });
         await m.react("📥");
 
         const data = await getAudioFile(video.url);
-        if (!data.status) return reply("❌ *බාගත කිරීමේ දෝෂයක්:* " + data.error);
+        
+        if (!data || !data.status || !fs.existsSync(data.filePath)) {
+            await m.react("❌");
+            return reply("❌ *බාගත කිරීම අසාර්ථක විය. පසුව උත්සාහ කරන්න.*");
+        }
 
         await bot.sendMessage(from, { 
-            audio: fs.readFileSync(data.filePath), 
+            audio: { url: data.filePath }, 
             mimetype: "audio/mpeg", 
             fileName: `${video.title}.mp3` 
         }, { quoted: mek });
 
-        fs.unlinkSync(data.filePath);
+        if (fs.existsSync(data.filePath)) fs.unlinkSync(data.filePath);
         await m.react("✅");
 
     } catch (e) {
+        console.error("Song Command Error:", e);
         reply("❌ දෝෂයක්: " + e.message);
     }
 });
@@ -64,7 +61,7 @@ async (bot, mek, m, { from, q, reply }) => {
 cmd({
     pattern: "video",
     alias: ["ytv", "ytmp4"],
-    desc: "Download YouTube MP4 via Custom API",
+    desc: "Download YouTube MP4 with Hybrid Fallback",
     category: "download",
     filename: __filename,
 },
@@ -76,75 +73,29 @@ async (bot, mek, m, { from, q, reply }) => {
         const video = await getYoutube(q);
         if (!video) return reply("❌ *ප්‍රතිඵල හමු නොවීය.*");
 
-        const caption = `
-🎬 *ᴢᴀɴᴛᴀ-ᴍᴅ ᴠɪᴅᴇᴏ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ* 🎬
-
-📝 *ᴛɪᴛʟᴇ:* ${video.title}
-🕒 *ᴅᴜʀᴀᴛɪᴏɴ:* ${video.timestamp}
-🔗 *ʟɪɴᴋ:* ${video.url}
-
-> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴢᴀɴᴛᴀ-ᴍᴅ*`;
+        const caption = `🎬 *ᴢᴀɴᴛᴀ-ᴍᴅ ᴠɪᴅᴇᴏ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ* 🎬\n\n📝 *ᴛɪᴛʟᴇ:* ${video.title}\n🕒 *ᴅᴜʀᴀᴛɪᴏɴ:* ${video.timestamp}\n🔗 *ʟɪɴᴋ:* ${video.url}\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴢᴀɴᴛᴀ-ᴍᴅ*`;
 
         await bot.sendMessage(from, { image: { url: video.thumbnail }, caption }, { quoted: mek });
         await m.react("📥");
 
         const data = await getVideoFile(video.url);
-        if (!data.status) return reply("❌ *බාගත කිරීම අසාර්ථක විය.*");
+        
+        if (!data || !data.status || !fs.existsSync(data.filePath)) {
+            await m.react("❌");
+            return reply("❌ *වීඩියෝව බාගත කිරීම අසාර්ථක විය.*");
+        }
 
         await bot.sendMessage(from, {
-            video: fs.readFileSync(data.filePath),
+            video: { url: data.filePath },
             mimetype: "video/mp4",
             caption: `🎬 ${video.title}`,
         }, { quoted: mek });
 
-        fs.unlinkSync(data.filePath);
+        if (fs.existsSync(data.filePath)) fs.unlinkSync(data.filePath);
         await m.react("✅");
+
     } catch (e) {
+        console.error("Video Command Error:", e);
         reply("❌ දෝෂයක්: " + e.message);
-    }
-});
-
-// --- GSONG COMMAND ---
-cmd({
-    pattern: "gsong",
-    alias: ["google-song", "isong"],
-    desc: "Download MP3 with a premium look",
-    category: "download",
-    filename: __filename,
-},
-async (bot, mek, m, { from, q, reply }) => {
-    try {
-        if (!q) return reply("🎼 *කරුණාකර නමක් ලබා දෙන්න.*");
-        await m.react("🔍");
-
-        const video = await getYoutube(q);
-        if (!video) return reply("❌ *ප්‍රතිඵල නැත.*");
-
-        const premiumCaption = `
-✨ *ᴢᴀɴᴛᴀ-ᴍᴅ ᴘʀᴇᴍɪᴜᴍ sᴏɴɢ* ✨
-
-📝 *ᴛɪᴛʟᴇ:* ${video.title}
-👤 *ᴀᴜᴛʜᴏʀ:* ${video.author.name}
-👁️ *ᴠɪᴇᴡs:* ${video.views.toLocaleString()}
-🔗 *ʟɪɴᴋ:* ${video.url}
-
-> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴢᴀɴᴛᴀ-ᴍᴅ*`;
-
-        await bot.sendMessage(from, { image: { url: video.thumbnail }, caption: premiumCaption }, { quoted: mek });
-        await m.react("📥");
-
-        const data = await getAudioFile(video.url);
-        if (!data.status) return reply("❌ දෝෂයකි.");
-
-        await bot.sendMessage(from, {
-            audio: fs.readFileSync(data.filePath),
-            mimetype: "audio/mpeg",
-            fileName: `${video.title}.mp3`
-        }, { quoted: mek });
-
-        fs.unlinkSync(data.filePath);
-        await m.react("✅");
-    } catch (e) {
-        reply("❌ Error: " + e.message);
     }
 });
