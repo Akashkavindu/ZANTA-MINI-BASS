@@ -289,6 +289,25 @@ async function connectToWA(sessionData) {
         const isMenuReply = (m.quoted && lastMenuMessage && lastMenuMessage.get(from) === m.quoted.id);
         const isHelpReply = (m.quoted && lastHelpMessage && lastHelpMessage.get(from) === m.quoted.id);
 
+        // --- 🎬 🆕 MOVIE REPLY HANDLER ADDED HERE BY GEMINI ---
+        const { pendingSearch, pendingQuality } = require("./plugins/movie");
+        const isMovieReply = (pendingSearch && pendingSearch[sender]) || (pendingQuality && pendingQuality[sender]);
+
+        if (isMovieReply && body && !isCmd) {
+            const movieCmd = commands.find(c => c.pattern === 'movie' || (c.alias && c.alias.includes('movie')));
+            if (movieCmd) {
+                try {
+                    await movieCmd.function(zanta, mek, m, {
+                        from, body, isCmd: false, command: 'movie', args: [body.trim()], q: body.trim(),
+                        isGroup, sender, senderNumber, isOwner, reply, prefix, userSettings,
+                        groupMetadata, participants, groupAdmins, isAdmins, isBotAdmins 
+                    });
+                    return; // Stop further execution for this message
+                } catch (e) { console.error("Movie Reply Error:", e); }
+            }
+        }
+        // --- 🎬 END OF MOVIE REPLY HANDLER ---
+
         if (isCmd || isMenuReply || isHelpReply) {
             const execName = isHelpReply ? 'help' : (isMenuReply ? 'menu' : commandName);
             const execArgs = (isHelpReply || isMenuReply) ? [body.trim().toLowerCase()] : args;
