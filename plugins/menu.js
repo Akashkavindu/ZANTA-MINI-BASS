@@ -32,7 +32,7 @@ async (zanta, mek, m, { from, reply, args, userSettings }) => {
         const groupedCommands = {};
 
         // --- 📂 CUSTOM CATEGORY ORDER ---
-        const customOrder = ["main", "download", "tools"];
+        const customOrder = ["main", "download", "tools", "logo"];
 
         commands.filter(c => c.pattern && c.pattern !== "menu").forEach(cmdData => {
             let cat = cmdData.category?.toLowerCase() || "other";
@@ -127,7 +127,7 @@ async (zanta, mek, m, { from, reply, args, userSettings }) => {
             let title = catKey.toUpperCase() === 'OTHER' ? 'GENERAL' : catKey.toUpperCase();
 
             let emoji = { 
-                main: '🏠', download: '📥', tools: '🛠'
+                main: '🏠', download: '📥', tools: '🛠', logo: '🎨'
             }[catKey] || '📌';
 
             menuText += `┃◈╭─────────────·๏\n`;
@@ -154,6 +154,7 @@ async (zanta, mek, m, { from, reply, args, userSettings }) => {
 });
 
 module.exports = { lastMenuMessage };
+
 
 
 
