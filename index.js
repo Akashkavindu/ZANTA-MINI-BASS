@@ -25,23 +25,16 @@ const { lastSettingsMessage } = require("./plugins/settings");
 const { lastHelpMessage } = require("./plugins/help");
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
-// --- 🛡️ Bad MAC Tracker ---
 const badMacTracker = new Map();
-
-// --- 🔌 Active Sockets Tracker ---
 const activeSockets = new Set();
-
-// --- 🧠 Global Storage for Memory Sync ---
 global.BOT_SESSIONS_CONFIG = {};
 
-// --- MongoDB Schemas ---
 const SessionSchema = new mongoose.Schema({
     number: { type: String, required: true, unique: true },
     creds: { type: Object, required: true }
 }, { collection: 'sessions' });
 const Session = mongoose.models.Session || mongoose.model("Session", SessionSchema);
 
-// 🛠️ පිරිසිදු JID එකක් ලබා ගැනීමට (Fixes LID and Suffix issues)
 const decodeJid = (jid) => {
     if (!jid) return jid;
     if (/:\d+@/gi.test(jid)) {
@@ -129,7 +122,7 @@ async function connectToWA(sessionData) {
         browser: Browsers.macOS("Firefox"),
         auth: state,
         version,
-        syncFullHistory: false,             
+        syncFullHistory: false,                     
         markOnlineOnConnect: userSettings.alwaysOnline === 'true',
         shouldSyncHistoryMessage: () => false, 
         getMessage: async (key) => { return { conversation: "ZANTA-MD" } }
@@ -174,7 +167,6 @@ async function connectToWA(sessionData) {
                 }, 20000); 
             }
 
-            // --- 🛠️ MODIFIED: CONNECTION MESSAGE ON/OFF CHECK ---
             if (userSettings.connectionMsg === 'true') {
                 await zanta.sendMessage(ownerJid, {
                     image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true` },
@@ -212,7 +204,10 @@ async function connectToWA(sessionData) {
         const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
 
-        // --- 🛠️ MODIFIED: SAFE ADMIN CHECK LOGIC ---
+        // --- 🛡️ 🆕 WORK TYPE (PUBLIC/PRIVATE) LOGIC ---
+        // මෙමගින් Private ඇති විට අයිතිකරු නොවන අයට කමාන්ඩ් ගැසීම වළක්වයි.
+        if (isCmd && userSettings.workType === 'private' && !isOwner) return;
+
         let groupMetadata = {};
         let participants = [];
         let groupAdmins = []; 
@@ -253,21 +248,38 @@ async function connectToWA(sessionData) {
 
         const reply = (text) => zanta.sendMessage(from, { text }, { quoted: mek });
 
+        // --- ⚙️ 🆕 MODIFIED SETTINGS REPLY HANDLER ---
         const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
         if (isSettingsReply && body && !isCmd && isOwner) {
             const input = body.trim().split(" ");
             let index = parseInt(input[0]);
-            // 🛠️ MODIFIED: Added connectionMsg to dbKeys (Index 13)
-            let dbKeys = ["", "botName", "ownerName", "prefix", "password", "alwaysOnline", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice", "autoReply", "connectionMsg"];
+            
+            // Index පේළිය: 1.Name, 2.Owner, 3.Prefix, 4.WorkType, 5.Pass, 6.AlwaysOnline...
+            let dbKeys = ["", "botName", "ownerName", "prefix", "workType", "password", "alwaysOnline", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice", "autoReply", "connectionMsg"];
             let dbKey = dbKeys[index];
 
             if (dbKey) {
-                if (index === 12 && input.length === 1) {
-                    let siteMsg = `📝 *ZANTA-MD AUTO REPLY SETTINGS*\n\nඔබේ බොට් සඳහා Auto Reply මැසේජ් සෑදීමට පහත Link එකට පිවිසෙන්න.\n\n🔗 *Link:* https://chic-puppy-62f8d1.netlify.app/\n\n*💡 උපදෙස්:* \n**Bot Settings** Tab එක වෙත ගොස් Auto Reply සකස් කරන්න.\n\n*Status:* ${userSettings.autoReply === 'true' ? '✅ ON' : '❌ OFF'}\nOn/Off කිරීමට \`12 on\` හෝ \`12 off\` ලෙස Reply කරන්න.\n\n> *Go to bot settings tab to set auto replies.*`;
+                // විශේෂ අවස්ථාව: Auto Reply Settings (Index 13)
+                if (index === 13 && input.length === 1) {
+                    let siteMsg = `📝 *ZANTA-MD AUTO REPLY SETTINGS*\n\nඔබේ බොට් සඳහා Auto Reply මැසේජ් සෑදීමට පහත Link එකට පිවිසෙන්න.\n\n🔗 *Link:* https://chic-puppy-62f8d1.netlify.app/\n\n*Status:* ${userSettings.autoReply === 'true' ? '✅ ON' : '❌ OFF'}`;
                     return reply(siteMsg);
                 }
 
-                let finalValue = (index >= 5) ? (input[1] === 'on' ? 'true' : 'false') : input.slice(1).join(" ");
+                // අගය ලබා ගැනීම (Boolean values logic starting from index 6)
+                let finalValue = "";
+                if (index === 4) {
+                    // Work Type: 4 public හෝ 4 private
+                    finalValue = input[1] === 'private' ? 'private' : 'public';
+                } else if (index >= 6) {
+                    // ON/OFF values
+                    finalValue = input[1] === 'on' ? 'true' : 'false';
+                } else {
+                    // Text values (Name, Owner, Prefix, Pass)
+                    finalValue = input.slice(1).join(" ");
+                }
+
+                if (!finalValue && index !== 13) return reply("⚠️ කරුණාකර අගයක් ලබා දෙන්න. (E.g: 4 private)");
+
                 await updateSetting(userNumber, dbKey, finalValue);
                 if (userSettings) userSettings[dbKey] = finalValue;
                 global.BOT_SESSIONS_CONFIG[userNumber] = userSettings;
@@ -276,12 +288,7 @@ async function connectToWA(sessionData) {
                     await zanta.sendPresenceUpdate(finalValue === 'true' ? 'available' : 'unavailable', from);
                 }
 
-                if (dbKey === "password") {
-                    let passMsg = `🔐 *WEB SITE PASSWORD UPDATED* 🔐\n\n🔑 *New Password:* ${finalValue}\n👤 *User ID:* ${userNumber}\n\n🌐 Link:* https://chic-puppy-62f8d1.netlify.app/`;
-                    await reply(passMsg);
-                } else {
-                    await reply(`✅ *${dbKey}* updated to: *${finalValue}*`);
-                }
+                await reply(`✅ *${dbKey}* updated to: *${finalValue.toUpperCase()}*`);
                 return;
             }
         }
@@ -289,26 +296,23 @@ async function connectToWA(sessionData) {
         const isMenuReply = (m.quoted && lastMenuMessage && lastMenuMessage.get(from) === m.quoted.id);
         const isHelpReply = (m.quoted && lastHelpMessage && lastHelpMessage.get(from) === m.quoted.id);
 
-        // --- 🎬 🆕 MOVIE REPLY HANDLER ADDED HERE BY GEMINI ---
+        // --- 🎬 MOVIE REPLY HANDLER ---
         const { pendingSearch, pendingQuality } = require("./plugins/movie");
+        const isMovieReply = (body && !isNaN(body.trim())) && ((pendingSearch && pendingSearch[sender]) || (pendingQuality && pendingQuality[sender]));
 
-// එවපු මැසේජ් එක අංකයක්ද සහ pending ලිස්ට් එකේ ඉන්නවද කියලා බලනවා
-const isMovieReply = (body && !isNaN(body.trim())) && ((pendingSearch && pendingSearch[sender]) || (pendingQuality && pendingQuality[sender]));
-
-if (isMovieReply && !isCmd) {
-    const movieCmd = commands.find(c => c.pattern === 'movie' || (c.alias && c.alias.includes('movie')));
-    if (movieCmd) {
-        try {
-            await movieCmd.function(zanta, mek, m, {
-                from, body, isCmd: false, command: 'movie', args: [body.trim()], q: body.trim(),
-                isGroup, sender, senderNumber, isOwner, reply, prefix, userSettings,
-                groupMetadata, participants, groupAdmins, isAdmins, isBotAdmins 
-            });
-            return; // අංකයක් නම් විතරක් මූවී එකට යවනවා, නැත්නම් සාමාන්‍ය විදිහට වැඩ
-        } catch (e) { console.error("Movie Reply Error:", e); }
-    }
-}
-        // --- 🎬 END OF MOVIE REPLY HANDLER ---
+        if (isMovieReply && !isCmd) {
+            const movieCmd = commands.find(c => c.pattern === 'movie' || (c.alias && c.alias.includes('movie')));
+            if (movieCmd) {
+                try {
+                    await movieCmd.function(zanta, mek, m, {
+                        from, body, isCmd: false, command: 'movie', args: [body.trim()], q: body.trim(),
+                        isGroup, sender, senderNumber, isOwner, reply, prefix, userSettings,
+                        groupMetadata, participants, groupAdmins, isAdmins, isBotAdmins 
+                    });
+                    return;
+                } catch (e) { console.error("Movie Reply Error:", e); }
+            }
+        }
 
         if (isCmd || isMenuReply || isHelpReply) {
             const execName = isHelpReply ? 'help' : (isMenuReply ? 'menu' : commandName);
@@ -333,13 +337,10 @@ startSystem();
 app.get("/", (req, res) => res.send("ZANTA-MD Online ✅"));
 app.listen(port);
 
-// --- 🔄 ✅ SAFE RESTART SYSTEM ---
 setTimeout(async () => {
     console.log("♻️ [RESTART] Cleaning up active connections...");
     for (const socket of activeSockets) {
-        try {
-            await socket.end(); 
-        } catch (e) {}
+        try { await socket.end(); } catch (e) {}
     }
     setTimeout(() => {
         console.log("🚀 Exiting for scheduled restart.");
