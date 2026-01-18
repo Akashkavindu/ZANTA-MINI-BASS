@@ -4,7 +4,7 @@ const config = require("../config");
 
 const SETTINGS_IMG = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true";
 
-// Settings Reply එක හඳුනා ගැනීමට (RAM එක බේරීමට විනාඩි 30කින් auto clean වේ)
+// Settings Reply එක හඳුනා ගැනීමට
 const lastSettingsMessage = new Map();
 
 cmd({
@@ -23,6 +23,9 @@ cmd({
     const ownerName = settings.ownerName || config.DEFAULT_OWNER_NAME || "Owner";
     const botPrefix = settings.prefix || prefix || ".";
     const webPass = settings.password === 'not_set' ? "Not Set ❌" : "Set ✅";
+    
+    // Work Type අගය ලබා ගැනීම (Default: Public)
+    const workType = (settings.workType || "public").toUpperCase();
 
     // --- 📊 Status Indicators ---
     const getStatus = (val) => val === 'true' ? '✅' : '❌';
@@ -32,32 +35,32 @@ cmd({
     statusText += `┃ ❶ *Name:* ${botName}\n`;
     statusText += `┃ ❷ *Owner:* ${ownerName}\n`;
     statusText += `┃ ❸ *Prefix:* [ ${botPrefix} ]\n`;
-    statusText += `┃ ❹ *Web Password:* ${webPass}\n`;
-    statusText += `┃ ❺ *Always Online:* ${getStatus(settings.alwaysOnline)}\n`;
-    statusText += `┃ ❻ *Auto Read Mg:* ${getStatus(settings.autoRead)}\n`;
-    statusText += `┃ ❼ *Auto Typing:* ${getStatus(settings.autoTyping)}\n`;
-    statusText += `┃ ❽ *Status Seen:* ${getStatus(settings.autoStatusSeen)}\n`;
-    statusText += `┃ ❾ *Status React:* ${getStatus(settings.autoStatusReact)}\n`;
-    statusText += `┃ ❿ *Read Command:* ${getStatus(settings.readCmd)}\n`;
-    statusText += `┃ ⓫ *Auto Voice:* ${getStatus(settings.autoVoice)}\n`;
-    statusText += `┃ ⓬ *Auto Reply:* ${getStatus(settings.autoReply)}\n`;
-    statusText += `┃ ⓭ *Connect Msg:* ${getStatus(settings.connectionMsg)}\n`; // ✅ අලුතින් එකතු කළා
+    statusText += `┃ ❹ *Work Type:* ${workType} 🔒\n`; // ✅ මෙතනට ඇතුළත් කළා
+    statusText += `┃ ❺ *Web Password:* ${webPass}\n`;
+    statusText += `┃ ❻ *Always Online:* ${getStatus(settings.alwaysOnline)}\n`;
+    statusText += `┃ ❼ *Auto Read Mg:* ${getStatus(settings.autoRead)}\n`;
+    statusText += `┃ ❽ *Auto Typing:* ${getStatus(settings.autoTyping)}\n`;
+    statusText += `┃ ❾ *Status Seen:* ${getStatus(settings.autoStatusSeen)}\n`;
+    statusText += `┃ ❿ *Status React:* ${getStatus(settings.autoStatusReact)}\n`;
+    statusText += `┃ ⓫ *Read Command:* ${getStatus(settings.readCmd)}\n`;
+    statusText += `┃ ⓬ *Auto Voice:* ${getStatus(settings.autoVoice)}\n`;
+    statusText += `┃ ⓭ *Auto Reply:* ${getStatus(settings.autoReply)}\n`;
+    statusText += `┃ ⓮ *Connect Msg:* ${getStatus(settings.connectionMsg)}\n`;
     statusText += `┃\n`;
     statusText += `╰━━━━━━━━━━━━━━━┈⊷\n\n`;
     statusText += `*💡 අගය වෙනස් කිරීමට Reply කරන්න:*\n`;
-    statusText += `*E.g:* \`5 on\` (Always Online ON කිරීමට)\n`;
-    statusText += `*E.g:* \`13 off\` (Connect Message OFF කිරීමට)\n`; // Example එක Update කළා
-    statusText += `*E.g:* \`4 mypass123\` (Password එකක් දැමීමට)`;
+    statusText += `*E.g:* \`4 private\` (Private කිරීමට)\n`; // Example එක Update කළා
+    statusText += `*E.g:* \`4 public\` (Public කිරීමට)\n`;
+    statusText += `*E.g:* \`6 on\` (Always Online ON කිරීමට)`;
 
     const sentMsg = await zanta.sendMessage(from, {
         image: { url: SETTINGS_IMG },
         caption: statusText
     }, { quoted: mek });
 
-    // පසුව Reply එක හඳුනා ගැනීමට ID එක සේව් කරයි
     lastSettingsMessage.set(from, sentMsg.key.id);
 
-    // RAM Cleanup: විනාඩි 30කට පසු මේ ID එක Map එකෙන් අයින් කරයි
+    // RAM Cleanup
     setTimeout(() => {
         if (lastSettingsMessage.get(from) === sentMsg.key.id) {
             lastSettingsMessage.delete(from);
