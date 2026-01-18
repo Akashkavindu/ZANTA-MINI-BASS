@@ -27,6 +27,9 @@ const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db")
 
 const badMacTracker = new Map();
 const activeSockets = new Set();
+// --- 🆕 ADDED: WORK TYPE TRACKER ---
+const lastWorkTypeMessage = new Map(); 
+
 global.BOT_SESSIONS_CONFIG = {};
 
 const SessionSchema = new mongoose.Schema({
@@ -204,8 +207,6 @@ async function connectToWA(sessionData) {
         const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
 
-        // --- 🛡️ 🆕 WORK TYPE (PUBLIC/PRIVATE) LOGIC ---
-        // මෙමගින් Private ඇති විට අයිතිකරු නොවන අයට කමාන්ඩ් ගැසීම වළක්වයි.
         if (isCmd && userSettings.workType === 'private' && !isOwner) return;
 
         let groupMetadata = {};
@@ -248,37 +249,55 @@ async function connectToWA(sessionData) {
 
         const reply = (text) => zanta.sendMessage(from, { text }, { quoted: mek });
 
-        // --- ⚙️ 🆕 MODIFIED SETTINGS REPLY HANDLER ---
+        // --- ⚙️ MODIFIED: ADVANCED SETTINGS & WORKTYPE REPLY HANDLER ---
         const isSettingsReply = (m.quoted && lastSettingsMessage && lastSettingsMessage.get(from) === m.quoted.id);
+        const isWorkTypeChoice = (m.quoted && lastWorkTypeMessage && lastWorkTypeMessage.get(from) === m.quoted.id);
+
+        // Logic for handling the 1 or 2 choice after selecting Work Type (Index 4)
+        if (isWorkTypeChoice && body && !isCmd && isOwner) {
+            let choice = body.trim();
+            let finalValue = (choice === '1') ? 'public' : (choice === '2') ? 'private' : null;
+
+            if (finalValue) {
+                await updateSetting(userNumber, 'workType', finalValue);
+                if (userSettings) userSettings.workType = finalValue;
+                global.BOT_SESSIONS_CONFIG[userNumber] = userSettings;
+                lastWorkTypeMessage.delete(from); 
+                return reply(`✅ *WORK_TYPE* updated to: *${finalValue.toUpperCase()}*`);
+            } else {
+                return reply("⚠️ වැරදි අංකයක්. කරුණාකර `1` (Public) හෝ `2` (Private) ලෙස රිප්ලයි කරන්න.");
+            }
+        }
+
         if (isSettingsReply && body && !isCmd && isOwner) {
             const input = body.trim().split(" ");
             let index = parseInt(input[0]);
-            
-            // Index පේළිය: 1.Name, 2.Owner, 3.Prefix, 4.WorkType, 5.Pass, 6.AlwaysOnline...
+
             let dbKeys = ["", "botName", "ownerName", "prefix", "workType", "password", "alwaysOnline", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice", "autoReply", "connectionMsg"];
             let dbKey = dbKeys[index];
 
             if (dbKey) {
-                // විශේෂ අවස්ථාව: Auto Reply Settings (Index 13)
+                // Modified: 4 index එක ඉස්සරහ මොනවා තිබුණත්/නැතත් Select mode මැසේජ් එක යැවීම
+                if (index === 4) {
+                    const workMsg = await reply("🛠️ *SELECT WORK MODE*\n\nකරුණාකර අංකය පමණක් රිප්ලයි කරන්න:\n1️⃣ *Public*\n2️⃣ *Private*\n\n> *ZANTA-MD Settings Control*");
+                    lastWorkTypeMessage.set(from, workMsg.key.id); 
+                    return;
+                }
+
                 if (index === 13 && input.length === 1) {
                     let siteMsg = `📝 *ZANTA-MD AUTO REPLY SETTINGS*\n\nඔබේ බොට් සඳහා Auto Reply මැසේජ් සෑදීමට පහත Link එකට පිවිසෙන්න.\n\n🔗 *Link:* https://chic-puppy-62f8d1.netlify.app/\n\n*Status:* ${userSettings.autoReply === 'true' ? '✅ ON' : '❌ OFF'}`;
                     return reply(siteMsg);
                 }
 
-                // අගය ලබා ගැනීම (Boolean values logic starting from index 6)
+                // Validation for other settings
+                if (input.length < 2) return reply(`⚠️ කරුණාකර අගයක් ලබා දෙන්න.\n*E.g:* \`${index} on\` හෝ \`${index} value\``);
+
                 let finalValue = "";
-                if (index === 4) {
-                    // Work Type: 4 public හෝ 4 private
-                    finalValue = input[1] === 'private' ? 'private' : 'public';
-                } else if (index >= 6) {
-                    // ON/OFF values
-                    finalValue = input[1] === 'on' ? 'true' : 'false';
+                if (index >= 6) {
+                    finalValue = input[1].toLowerCase() === 'on' ? 'true' : 'false';
                 } else {
-                    // Text values (Name, Owner, Prefix, Pass)
                     finalValue = input.slice(1).join(" ");
                 }
-
-                if (!finalValue && index !== 13) return reply("⚠️ කරුණාකර අගයක් ලබා දෙන්න. (E.g: 4 private)");
 
                 await updateSetting(userNumber, dbKey, finalValue);
                 if (userSettings) userSettings[dbKey] = finalValue;
@@ -288,7 +307,12 @@ async function connectToWA(sessionData) {
                     await zanta.sendPresenceUpdate(finalValue === 'true' ? 'available' : 'unavailable', from);
                 }
 
-                await reply(`✅ *${dbKey}* updated to: *${finalValue.toUpperCase()}*`);
+                if (dbKey === "password") {
+                    let passMsg = `🔐 *WEB SITE PASSWORD UPDATED* 🔐\n\n🔑 *New Password:* ${finalValue}\n👤 *User ID:* ${userNumber}\n\n🌐 *Link:* https://chic-puppy-62f8d1.netlify.app/`;
+                    await reply(passMsg);
+                } else {
+                    await reply(`✅ *${dbKey}* updated to: *${finalValue.toUpperCase()}*`);
+                }
                 return;
             }
         }
@@ -296,7 +320,6 @@ async function connectToWA(sessionData) {
         const isMenuReply = (m.quoted && lastMenuMessage && lastMenuMessage.get(from) === m.quoted.id);
         const isHelpReply = (m.quoted && lastHelpMessage && lastHelpMessage.get(from) === m.quoted.id);
 
-        // --- 🎬 MOVIE REPLY HANDLER ---
         const { pendingSearch, pendingQuality } = require("./plugins/movie");
         const isMovieReply = (body && !isNaN(body.trim())) && ((pendingSearch && pendingSearch[sender]) || (pendingQuality && pendingQuality[sender]));
 
