@@ -73,8 +73,8 @@ cmd(
 // 2. Speed Test
 cmd(
     {
-        pattern: "speed",
-        alias: ["system", "ms"],
+        pattern: "ping",
+        alias: ["bot", "ms"],
         react: "⚡",
         category: "main",
         filename: __filename,
@@ -82,8 +82,7 @@ cmd(
     async (zanta, mek, m, { from, userSettings }) => {
         try {
             const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
-            const botName =
-                settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
+            const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
             const startTime = Date.now();
 
             // මුලින්ම පණිවිඩය යවයි
@@ -102,9 +101,9 @@ cmd(
                     forwardingScore: 999,
                     isForwarded: true,
                     forwardedNewsletterMessageInfo: {
-                        newsletterJid: "120363404058637485@newsletter", // 👈 මෙතනට ඔයාගේ Channel JID එක දාන්න
-                        newsletterName: "ZANTA-MD BOT OFFICIAL", // 👈 මෙතනට චැනල් එකේ නම දාන්න
-                        serverMessageId: 143,
+                        newsletterJid: "120363406265537739@newsletter", // 👈 මෙතනට ඔයාගේ නිවැරදි Channel JID එක දාන්න
+                        newsletterName: "𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑶𝑭𝑭𝑰𝑪𝑰𝑨𝑳 </>", // 👈 මෙතනට චැනල් එකේ නම දාන්න
+                        serverMessageId: 100,
                     },
                 },
             });
