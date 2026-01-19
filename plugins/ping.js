@@ -14,7 +14,7 @@ function bytesToSize(bytes) {
 }
 
 cmd({
-    pattern: "ping",
+    pattern: "system",
     alias: ["status", "info"],
     react: "⚙️",
     desc: "Check bot speed and system status.",
@@ -52,9 +52,6 @@ async (zanta, mek, m, { from, userSettings }) => {
             image: { url: STATUS_IMAGE_URL },
             caption: statusMessage
         }, { quoted: mek });
-
-        // පැරණි පණිවිඩය මැකීම
-        await zanta.sendMessage(from, { delete: loadingMsg.key });
 
     } catch (e) {
         console.error("[PING ERROR]", e);
