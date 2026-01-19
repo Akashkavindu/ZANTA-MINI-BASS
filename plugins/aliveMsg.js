@@ -8,17 +8,17 @@ function getAliveMessage() {
 💖 *Hey...I’m {BOT_NAME}🙃, your lovely assistant — alive and sparkling now!*
 *╰────♡◉◉◉♡────⌬*
 
-*📅 Date: ${date}*
-*⌚ Time: ${time}*
+*📅 ᴅᴀᴛᴇ: ${date}*
+*⌚ ᴛɪᴍᴇ: ${time}*
 *───────────────*
 
-*📱 Number: {OWNER_NUMBER}*
-*💬 Prefix: {PREFIX}*
+*📱 ɴᴜᴍʙᴇʀ: {OWNER_NUMBER}*
+*💬 ᴘʀᴇꜰɪx: {PREFIX}*
 *───────────────*
-*🌐 Contact Zanta*
+*🌐 ᴄᴏɴᴛᴀᴄᴛ ᴢᴀɴᴛᴀ*
 > http://wa.me/+94743404814?text=*Hey__ZANTA*
 
-> *© ZANTA-MD WA BOT*`;
+> *© POWERED BY ZANTA*`;
 }
 
 module.exports = { getAliveMessage };
