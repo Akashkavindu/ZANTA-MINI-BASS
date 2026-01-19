@@ -25,6 +25,9 @@ const { lastSettingsMessage } = require("./plugins/settings");
 const { lastHelpMessage } = require("./plugins/help");
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
+// 🆕 Shared Logger instance එකක් හැදුවා (සෙෂන් 35කටම එකයි - RAM ඉතුරු වේ)
+const logger = P({ level: "silent" });
+
 const badMacTracker = new Map();
 const activeSockets = new Set();
 const lastWorkTypeMessage = new Map(); 
@@ -93,8 +96,11 @@ async function startSystem() {
     await loadPlugins();
     const allSessions = await Session.find({});
     console.log(`📂 Total sessions: ${allSessions.length}. Connecting...`);
+    
+    // 🆕 Batch size එක 2 කරලා Delay එක තත්පර 12ක් කළා (RAM Spike එක පාලනයට)
     const BATCH_SIZE = 4; 
     const DELAY_BETWEEN_BATCHES = 8000; 
+
     for (let i = 0; i < allSessions.length; i += BATCH_SIZE) {
         const batch = allSessions.slice(i, i + BATCH_SIZE);
         setTimeout(async () => {
@@ -119,12 +125,12 @@ async function connectToWA(sessionData) {
     const { version } = await fetchLatestBaileysVersion();
 
     const zanta = makeWASocket({
-        logger: P({ level: "silent" }), 
+        logger: logger, // 🆕 Shared Logger එක පාවිච්චි කළා
         printQRInTerminal: false,
         browser: Browsers.macOS("Firefox"),
         auth: state,
         version,
-        syncFullHistory: false,                     
+        syncFullHistory: false,                                     
         markOnlineOnConnect: userSettings.alwaysOnline === 'true',
         shouldSyncHistoryMessage: () => false, 
         getMessage: async (key) => { return { conversation: "ZANTA-MD" } }
@@ -136,6 +142,11 @@ async function connectToWA(sessionData) {
         const { connection, lastDisconnect } = update;
         if (connection === "close") {
             activeSockets.delete(zanta);
+            
+            // 🆕 Memory Cleanup: Listeners සහ Intervals සම්පූර්ණයෙන්ම අයින් කිරීම
+            zanta.ev.removeAllListeners();
+            if (zanta.onlineInterval) clearInterval(zanta.onlineInterval);
+
             const reason = lastDisconnect?.error?.output?.statusCode;
             const errorMsg = lastDisconnect?.error?.message || "";
 
@@ -150,8 +161,6 @@ async function connectToWA(sessionData) {
             } else if (reason === DisconnectReason.loggedOut) {
                 await Session.deleteOne({ number: sessionData.number });
             } else { setTimeout(() => connectToWA(sessionData), 5000); }
-
-            if (zanta.onlineInterval) clearInterval(zanta.onlineInterval);
 
         } else if (connection === "open") {
             console.log(`✅ [${userNumber}] Connected Successfully`);
@@ -206,7 +215,6 @@ async function connectToWA(sessionData) {
         }
 
         const prefix = userSettings.prefix;
-        // බටන් එකක් නම් Prefix එක චෙක් කරන්නේ නැතිව Command එකක් ලෙස සලකනවා
         const isCmd = body.startsWith(prefix) || isButton; 
         const isQuotedReply = mek.message[type]?.contextInfo?.quotedMessage;
         const sender = mek.key.fromMe ? zanta.user.id : (mek.key.participant || mek.key.remoteJid);
@@ -259,14 +267,12 @@ async function connectToWA(sessionData) {
         // --- 🆕 CMD NAME LOGIC ---
         let commandName = "";
         if (isButton) {
-            // බටන් එකේ ID එකේ ප්‍රිෆික්ස් එක තිබුණත් නැතත් නම නිවැරදිව වෙන් කරගන්නවා
             let cleanId = body.startsWith(prefix) ? body.slice(prefix.length).trim() : body.trim();
             let foundCmd = commands.find(c => c.pattern === cleanId.split(" ")[0].toLowerCase() || (c.alias && c.alias.includes(cleanId.split(" ")[0].toLowerCase())));
 
             if (foundCmd) {
                 commandName = cleanId.split(" ")[0].toLowerCase();
             } else {
-                // කමාන්ඩ් එකක් නොවන ඕනෑම බටන් එකක් (cat_main වැනි) මෙනු එකට යවනවා
                 commandName = "menu";
             }
         } else if (isCmd) {
@@ -391,7 +397,11 @@ app.listen(port);
 setTimeout(async () => {
     console.log("♻️ [RESTART] Cleaning up active connections...");
     for (const socket of activeSockets) {
-        try { await socket.end(); } catch (e) {}
+        try { 
+            // 🆕 Restart වෙද්දීත් listeners clean කිරීම
+            socket.ev.removeAllListeners();
+            await socket.end(); 
+        } catch (e) {}
     }
     setTimeout(() => {
         console.log("🚀 Exiting for scheduled restart.");
