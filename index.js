@@ -205,14 +205,13 @@ async function connectToWA(sessionData) {
         }
 
         const prefix = userSettings.prefix;
-        const isCmd = body.startsWith(prefix) || isButton; 
+        let isCmd = body.startsWith(prefix) || isButton; 
         const sender = mek.key.fromMe ? zanta.user.id : (mek.key.participant || mek.key.remoteJid);
         const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
 
         // 🛡️ [PRIVATE MODE BLOCKING]
         if (userSettings.workType === 'private' && !isOwner) {
-            // Command එකක් හෝ Button එකක් නම් පමණක් මැසේජ් එක යවයි
             if (isCmd) {
                 await zanta.sendMessage(from, { 
                     text: `⚠️ *PRIVATE MODE ACTIVED*`,
@@ -220,14 +219,14 @@ async function connectToWA(sessionData) {
                         forwardingScore: 999,
                         isForwarded: true,
                         forwardedNewsletterMessageInfo: {
-                            newsletterJid: '120363406265537739@newsletter', // ඔයාගේ Channel JID එක
+                            newsletterJid: '120363406265537739@newsletter',
                             newsletterName: '𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑶𝑭𝑭𝑰𝑪𝑰𝑨𝑳 </>',
                             serverMessageId: 100
                         }
                     }
                 }, { quoted: mek });
             }
-            return; // කිසිදු වැඩක් නොකර නවත්වයි (RAM Optimization)
+            return;
         }
 
         if (from === "status@broadcast") {
@@ -238,13 +237,23 @@ async function connectToWA(sessionData) {
             return;
         }
 
-        let groupMetadata = {};
-        let participants = [];
-        let groupAdmins = []; 
-        let isAdmins = false;
-        let isBotAdmins = false;
-
         const m = sms(zanta, mek);
+
+        // --- 🎵 SONG REPLY HANDLER (NUMBER REPLY) ---
+        const isSongReply = (m.quoted && m.quoted.caption && m.quoted.caption.includes("🎵 *SONG DOWNLOADER*"));
+        if (isSongReply && body && !isCmd) {
+            const songUrlMatch = m.quoted.caption.match(/🔗 \*Link:\* (https?:\/\/[^\s]+)/);
+            if (songUrlMatch) {
+                const songUrl = songUrlMatch[1];
+                if (body === '1') {
+                    body = `${prefix}ytsong_audio ${songUrl}`;
+                    isCmd = true;
+                } else if (body === '2') {
+                    body = `${prefix}ytsong_doc ${songUrl}`;
+                    isCmd = true;
+                }
+            }
+        }
 
         // Auto Reply Section
         if (userSettings.autoReply === 'true' && userSettings.autoReplies && !isCmd && !mek.key.fromMe) {
@@ -328,6 +337,12 @@ async function connectToWA(sessionData) {
             const cmd = commands.find(c => c.pattern === execName || (c.alias && c.alias.includes(execName)));
 
             if (cmd) {
+                let groupMetadata = {};
+                let participants = [];
+                let groupAdmins = []; 
+                let isAdmins = false;
+                let isBotAdmins = false;
+
                 if (isGroup) {
                     try {
                         groupMetadata = await zanta.groupMetadata(from).catch(e => ({}));
