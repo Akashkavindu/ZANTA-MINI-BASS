@@ -4,6 +4,7 @@ const aliveMsg = require('./aliveMsg');
 const { sendButtons } = require("gifted-btns");
 
 const CHANNEL_JID = "120363406265537739@newsletter"; 
+const ALIVE_VIDEO_URL = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/8e7465c0-91d8-4b94-866f-0f84cd1edb41.mp4?raw=true";
 
 cmd({
     pattern: "alive",
@@ -26,11 +27,15 @@ async (zanta, mek, m, { from, reply, userSettings }) => {
             .replace(/{PREFIX}/g, prefix);
 
         if (isButtonsOn) {
-            // --- 🔵 BUTTONS ON MODE ---
-            // 1. Image එක යැවීම
-            await zanta.sendMessage(from, { image: { url: config.ALIVE_IMG } }, { quoted: mek });
+            // --- 🔵 BUTTONS ON MODE (With Video Note) ---
 
-            // 2. Buttons යැවීම (ID එකෙන් කෙලින්ම command එක trigger කරයි)
+            // 1. Video Note (PTV) එක යැවීම
+            await zanta.sendMessage(from, { 
+                video: { url: ALIVE_VIDEO_URL }, 
+                ptv: true 
+            }, { quoted: mek });
+
+            // 2. Buttons යැවීම
             const buttons = [
                 { id: prefix + "ping", text: "⚡ PING" },
                 { id: prefix + "menu", text: "📜 MENU" },
@@ -45,9 +50,9 @@ async (zanta, mek, m, { from, reply, userSettings }) => {
             });
 
         } else {
-            // --- 🟢 BUTTONS OFF MODE (With Channel Forwarding) ---
+            // --- 🟢 BUTTONS OFF MODE (With Video Caption) ---
             return await zanta.sendMessage(from, {
-                image: { url: config.ALIVE_IMG },
+                video: { url: ALIVE_VIDEO_URL },
                 caption: finalMsg,
                 contextInfo: {
                     forwardingScore: 999,
@@ -55,7 +60,7 @@ async (zanta, mek, m, { from, reply, userSettings }) => {
                     forwardedNewsletterMessageInfo: {
                         newsletterJid: CHANNEL_JID,
                         serverMessageId: 100,
-                        newsletterName: "𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑶𝑭𝑭𝑰𝑪𝑰𝑨𝑳 </>"
+                        newsletterName: "ZANTA-MD UPDATES"
                     }
                 }
             }, { quoted: mek });
