@@ -25,7 +25,7 @@ const { lastSettingsMessage } = require("./plugins/settings");
 const { lastHelpMessage } = require("./plugins/help");
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
-// 🆕 Shared Logger instance එකක් හැදුවා (සෙෂන් 35කටම එකයි - RAM ඉතුරු වේ)
+// 🆕 Shared Logger instance
 const logger = P({ level: "silent" });
 
 const badMacTracker = new Map();
@@ -97,7 +97,6 @@ async function startSystem() {
     const allSessions = await Session.find({});
     console.log(`📂 Total sessions: ${allSessions.length}. Connecting...`);
 
-    // 🆕 Batch size එක 4 කරලා Delay එක තත්පර 8ක් කළා
     const BATCH_SIZE = 4; 
     const DELAY_BETWEEN_BATCHES = 8000; 
 
@@ -142,13 +141,10 @@ async function connectToWA(sessionData) {
         const { connection, lastDisconnect } = update;
         if (connection === "close") {
             activeSockets.delete(zanta);
-
             zanta.ev.removeAllListeners();
             if (zanta.onlineInterval) clearInterval(zanta.onlineInterval);
-
             const reason = lastDisconnect?.error?.output?.statusCode;
             const errorMsg = lastDisconnect?.error?.message || "";
-
             if (errorMsg.includes("Bad MAC") || errorMsg.includes("Encryption")) {
                 let count = badMacTracker.get(userNumber) || 0;
                 count++;
@@ -160,12 +156,10 @@ async function connectToWA(sessionData) {
             } else if (reason === DisconnectReason.loggedOut) {
                 await Session.deleteOne({ number: sessionData.number });
             } else { setTimeout(() => connectToWA(sessionData), 5000); }
-
         } else if (connection === "open") {
             console.log(`✅ [${userNumber}] Connected Successfully`);
             badMacTracker.delete(userNumber);
             const ownerJid = decodeJid(zanta.user.id);
-
             if (!zanta.onlineInterval) {
                 zanta.onlineInterval = setInterval(async () => {
                     const currentSet = global.BOT_SESSIONS_CONFIG[userNumber];
@@ -176,7 +170,6 @@ async function connectToWA(sessionData) {
                     }
                 }, 20000); 
             }
-
             if (userSettings.connectionMsg === 'true') {
                 await zanta.sendMessage(ownerJid, {
                     image: { url: `https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true` },
@@ -193,13 +186,12 @@ async function connectToWA(sessionData) {
         if (!mek || !mek.message) return;
 
         userSettings = global.BOT_SESSIONS_CONFIG[userNumber];
-
-        const type = getContentType(mek.message);
         const from = mek.key.remoteJid;
         const isGroup = from.endsWith("@g.us");
-
+        const type = getContentType(mek.message);
         let body = (type === "conversation") ? mek.message.conversation : (mek.message[type]?.text || mek.message[type]?.caption || "");
 
+        // Button/List handling
         let isButton = false;
         if (mek.message?.buttonsResponseMessage) {
             body = mek.message.buttonsResponseMessage.selectedButtonId;
@@ -214,8 +206,29 @@ async function connectToWA(sessionData) {
 
         const prefix = userSettings.prefix;
         const isCmd = body.startsWith(prefix) || isButton; 
-        const isQuotedReply = mek.message[type]?.contextInfo?.quotedMessage;
         const sender = mek.key.fromMe ? zanta.user.id : (mek.key.participant || mek.key.remoteJid);
+        const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
+        const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
+
+        // 🛡️ [PRIVATE MODE BLOCKING]
+        if (userSettings.workType === 'private' && !isOwner) {
+            // Command එකක් හෝ Button එකක් නම් පමණක් මැසේජ් එක යවයි
+            if (isCmd) {
+                await zanta.sendMessage(from, { 
+                    text: `⚠️ *PRIVATE MODE ACTIVED*`,
+                    contextInfo: {
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                            newsletterJid: '120363406265537739@newsletter', // ඔයාගේ Channel JID එක
+                            newsletterName: '𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑶𝑭𝑭𝑰𝑪𝑰𝑨𝑳 </>',
+                            serverMessageId: 100
+                        }
+                    }
+                }, { quoted: mek });
+            }
+            return; // කිසිදු වැඩක් නොකර නවත්වයි (RAM Optimization)
+        }
 
         if (from === "status@broadcast") {
             if (userSettings.autoStatusSeen === 'true') await zanta.readMessages([mek.key]);
@@ -225,12 +238,6 @@ async function connectToWA(sessionData) {
             return;
         }
 
-        const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
-        const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
-
-        if (isCmd && userSettings.workType === 'private' && !isOwner) return;
-
-        // Group Metadata Fetching Optimization (Fetch only when needed for Commands)
         let groupMetadata = {};
         let participants = [];
         let groupAdmins = []; 
@@ -248,7 +255,6 @@ async function connectToWA(sessionData) {
             }
         }
 
-        // Identifying the Command
         let commandName = "";
         if (isButton) {
             let cleanId = body.startsWith(prefix) ? body.slice(prefix.length).trim() : body.trim();
@@ -271,7 +277,6 @@ async function connectToWA(sessionData) {
         const isMenuReply = (m.quoted && lastMenuMessage && lastMenuMessage.get(from) === m.quoted.id);
         const isHelpReply = (m.quoted && lastHelpMessage && lastHelpMessage.get(from) === m.quoted.id);
 
-        // Settings Handling
         if (isWorkTypeChoice && body && !isCmd && isOwner) {
             let choice = body.trim();
             let finalValue = (choice === '1') ? 'public' : (choice === '2') ? 'private' : null;
@@ -298,17 +303,17 @@ async function connectToWA(sessionData) {
                     return;
                 }
                 if (index === 13 && input.length === 1) {
-                    let siteMsg = `📝 *ZANTA-MD AUTO REPLY SETTINGS*\n\nඔබේ බොට් සඳහා Auto Reply මැසේජ් සෑදීමට පහත Link එකට පිවිසෙන්න.\n\n🔗 *Link:* https://chic-puppy-62f8d1.netlify.app/\n\n*Status:* ${userSettings.autoReply === 'true' ? '✅ ON' : '❌ OFF'}`;
+                    let siteMsg = `📝 *ZANTA-MD AUTO REPLY SETTINGS*\n\n🔗 *Link:* https://chic-puppy-62f8d1.netlify.app/\n\n*Status:* ${userSettings.autoReply === 'true' ? '✅ ON' : '❌ OFF'}`;
                     return reply(siteMsg);
                 }
-                if (input.length < 2) return reply(`⚠️ කරුණාකර අගයක් ලබා දෙන්න.\n*E.g:* \`${index} on\` හෝ \`${index} value\``);
+                if (input.length < 2) return reply(`⚠️ කරුණාකර අගයක් ලබා දෙන්න.`);
                 let finalValue = index >= 6 ? (input[1].toLowerCase() === 'on' ? 'true' : 'false') : input.slice(1).join(" ");
                 await updateSetting(userNumber, dbKey, finalValue);
                 if (userSettings) userSettings[dbKey] = finalValue;
                 global.BOT_SESSIONS_CONFIG[userNumber] = userSettings;
                 if (dbKey === "alwaysOnline") await zanta.sendPresenceUpdate(finalValue === 'true' ? 'available' : 'unavailable', from);
                 if (dbKey === "password") {
-                    let passMsg = `🔐 *WEB SITE PASSWORD UPDATED* 🔐\n\n🔑 *New Password:* ${finalValue}\n👤 *User ID:* ${userNumber}\n\n🌐 *Link:* https://chic-puppy-62f8d1.netlify.app/`;
+                    let passMsg = `🔐 *WEB SITE PASSWORD UPDATED* 🔐\n\n🔑 *New Password:* ${finalValue}\n👤 *User ID:* ${userNumber}`;
                     await reply(passMsg);
                 } else {
                     await reply(`✅ *${dbKey}* updated to: *${finalValue.toUpperCase()}*`);
@@ -317,14 +322,12 @@ async function connectToWA(sessionData) {
             }
         }
 
-        // Command Execution with Metadata Optimization
         if (isCmd || isMenuReply || isHelpReply || isButton) {
             const execName = isHelpReply ? 'help' : (isMenuReply || (isButton && commandName === "menu") ? 'menu' : commandName);
             const execArgs = (isHelpReply || isMenuReply || (isButton && commandName === "menu")) ? [body.trim().toLowerCase()] : args;
             const cmd = commands.find(c => c.pattern === execName || (c.alias && c.alias.includes(execName)));
 
             if (cmd) {
-                // Fetch Group Metadata ONLY when a valid command is found and it's a Group
                 if (isGroup) {
                     try {
                         groupMetadata = await zanta.groupMetadata(from).catch(e => ({}));
@@ -339,10 +342,8 @@ async function connectToWA(sessionData) {
                         console.log("Error Fetching Group Metadata: ", e);
                     }
                 }
-
                 if (userSettings.readCmd === 'true') await zanta.readMessages([mek.key]);
                 if (cmd.react && !isButton) zanta.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
-
                 try {
                     await cmd.function(zanta, mek, m, {
                         from, body, isCmd, command: execName, args: execArgs, q: execArgs.join(" "),
