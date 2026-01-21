@@ -8,7 +8,7 @@ const {
     Browsers,
     generateForwardMessageContent,
     prepareWAMessageMedia
-} = require("@whiskeysockets/baileys");
+} = require("@zassxd/baileys");
 
 const fs = require("fs");
 const P = require("pino");
@@ -25,14 +25,13 @@ const { lastSettingsMessage } = require("./plugins/settings");
 const { lastHelpMessage } = require("./plugins/help");
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
-// 🆕 Shared Logger instance
 const logger = P({ level: "silent" });
-
 const badMacTracker = new Map();
 const activeSockets = new Set();
 const lastWorkTypeMessage = new Map(); 
 
 global.BOT_SESSIONS_CONFIG = {};
+
 
 const SessionSchema = new mongoose.Schema({
     number: { type: String, required: true, unique: true },
@@ -68,9 +67,7 @@ app.get("/update-cache", async (req, res) => {
             console.log(`♻️ Memory Synced for ${userNumber}`);
         }
         res.send("OK");
-    } catch (e) {
-        res.status(500).send("Error");
-    }
+    } catch (e) { res.status(500).send("Error"); }
 });
 
 process.on('uncaughtException', (err) => {
@@ -158,6 +155,19 @@ async function connectToWA(sessionData) {
             } else { setTimeout(() => connectToWA(sessionData), 5000); }
         } else if (connection === "open") {
             console.log(`✅ [${userNumber}] Connected Successfully`);
+
+            // --- 🧹 PRE-KEY CLEANUP LOGIC ---
+            try {
+                const files = fs.readdirSync(authPath);
+                for (const file of files) {
+                    if (file.startsWith('pre-key-') || file.startsWith('sender-key-') || file.startsWith('session-') || file.startsWith('app-state-')) {
+                        fs.unlinkSync(path.join(authPath, file));
+                    }
+                }
+                console.log(`🧹 [${userNumber}] Auth Cache Cleaned Up`);
+            } catch (err) { console.error("Cleanup Error:", err); }
+            // --------------------------------
+
             badMacTracker.delete(userNumber);
             const ownerJid = decodeJid(zanta.user.id);
             if (!zanta.onlineInterval) {
@@ -191,7 +201,6 @@ async function connectToWA(sessionData) {
         const type = getContentType(mek.message);
         let body = (type === "conversation") ? mek.message.conversation : (mek.message[type]?.text || mek.message[type]?.caption || "");
 
-        // Button/List handling
         let isButton = false;
         if (mek.message?.buttonsResponseMessage) {
             body = mek.message.buttonsResponseMessage.selectedButtonId;
@@ -210,7 +219,6 @@ async function connectToWA(sessionData) {
         const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
 
-        // 🛡️ [PRIVATE MODE BLOCKING]
         if (userSettings.workType === 'private' && !isOwner) {
             if (isCmd) {
                 await zanta.sendMessage(from, { 
@@ -239,29 +247,20 @@ async function connectToWA(sessionData) {
 
         const m = sms(zanta, mek);
 
-        // --- 🎵 SONG REPLY HANDLER (NUMBER REPLY) ---
         const isSongReply = (m.quoted && m.quoted.caption && m.quoted.caption.includes("🎵 *SONG DOWNLOADER*"));
         if (isSongReply && body && !isCmd) {
             const songUrlMatch = m.quoted.caption.match(/🔗 \*Link:\* (https?:\/\/[^\s]+)/);
             if (songUrlMatch) {
                 const songUrl = songUrlMatch[1];
-                if (body === '1') {
-                    body = `${prefix}ytsong_audio ${songUrl}`;
-                    isCmd = true;
-                } else if (body === '2') {
-                    body = `${prefix}ytsong_doc ${songUrl}`;
-                    isCmd = true;
-                }
+                if (body === '1') { body = `${prefix}ytsong_audio ${songUrl}`; isCmd = true; }
+                else if (body === '2') { body = `${prefix}ytsong_doc ${songUrl}`; isCmd = true; }
             }
         }
 
-        // Auto Reply Section
         if (userSettings.autoReply === 'true' && userSettings.autoReplies && !isCmd && !mek.key.fromMe) {
             const chatMsg = body.toLowerCase().trim();
             const foundMatch = userSettings.autoReplies.find(ar => ar.keyword.toLowerCase().trim() === chatMsg);
-            if (foundMatch) {
-                await zanta.sendMessage(from, { text: foundMatch.reply }, { quoted: mek });
-            }
+            if (foundMatch) await zanta.sendMessage(from, { text: foundMatch.reply }, { quoted: mek });
         }
 
         let commandName = "";
@@ -291,7 +290,7 @@ async function connectToWA(sessionData) {
             let finalValue = (choice === '1') ? 'public' : (choice === '2') ? 'private' : null;
             if (finalValue) {
                 await updateSetting(userNumber, 'workType', finalValue);
-                if (userSettings) userSettings.workType = finalValue;
+                userSettings.workType = finalValue;
                 global.BOT_SESSIONS_CONFIG[userNumber] = userSettings;
                 lastWorkTypeMessage.delete(from); 
                 return reply(`✅ *WORK_TYPE* updated to: *${finalValue.toUpperCase()}*`);
@@ -318,7 +317,7 @@ async function connectToWA(sessionData) {
                 if (input.length < 2) return reply(`⚠️ කරුණාකර අගයක් ලබා දෙන්න.`);
                 let finalValue = index >= 6 ? (input[1].toLowerCase() === 'on' ? 'true' : 'false') : input.slice(1).join(" ");
                 await updateSetting(userNumber, dbKey, finalValue);
-                if (userSettings) userSettings[dbKey] = finalValue;
+                userSettings[dbKey] = finalValue;
                 global.BOT_SESSIONS_CONFIG[userNumber] = userSettings;
                 if (dbKey === "alwaysOnline") await zanta.sendPresenceUpdate(finalValue === 'true' ? 'available' : 'unavailable', from);
                 if (dbKey === "password") {
@@ -353,9 +352,7 @@ async function connectToWA(sessionData) {
                         const cleanAdmins = groupAdmins.map(v => decodeJid(v));
                         isAdmins = cleanAdmins.includes(cleanSender);
                         isBotAdmins = cleanAdmins.includes(cleanBot);
-                    } catch (e) {
-                        console.log("Error Fetching Group Metadata: ", e);
-                    }
+                    } catch (e) { console.log("Error Fetching Group Metadata: ", e); }
                 }
                 if (userSettings.readCmd === 'true') await zanta.readMessages([mek.key]);
                 if (cmd.react && !isButton) zanta.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
@@ -366,6 +363,11 @@ async function connectToWA(sessionData) {
                         groupMetadata, participants, groupAdmins, isAdmins, isBotAdmins 
                     });
                 } catch (e) { console.error(e); }
+
+                // --- 🧹 GARBAGE COLLECTION ADDED HERE ---
+                if (global.gc) {
+                    global.gc(); 
+                }
             }
         }
     });
