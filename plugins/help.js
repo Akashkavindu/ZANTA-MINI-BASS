@@ -1,8 +1,28 @@
 const { cmd } = require("../command");
 const config = require("../config");
+const axios = require('axios'); // පින්තූරය කලින් ලබා ගැනීමට
 
 // 🎯 Reply හඳුනාගැනීම සඳහා ID එක සේව් කරන Map එක
 const lastHelpMessage = new Map();
+
+const HELP_IMG_URL = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true";
+
+// --- 🖼️ IMAGE PRE-LOAD LOGIC ---
+let cachedHelpImage = null;
+
+async function preLoadHelpImage() {
+    try {
+        const response = await axios.get(HELP_IMG_URL, { responseType: 'arraybuffer' });
+        cachedHelpImage = Buffer.from(response.data);
+        console.log("✅ [CACHE] Help image pre-loaded successfully.");
+    } catch (e) {
+        console.error("❌ [CACHE] Failed to pre-load help image:", e.message);
+        cachedHelpImage = { url: HELP_IMG_URL };
+    }
+}
+
+// බොට් පණ ගැන්වෙන විටම පින්තූරය ගන්න
+preLoadHelpImage();
 
 cmd({
     pattern: "help",
@@ -11,10 +31,9 @@ cmd({
     react: "❓",
     desc: "බොට් සහාය මධ්‍යස්ථානය.",
     filename: __filename,
-}, async (zanta, mek, m, { from, reply, args, pushname, userSettings }) => { // <--- userSettings එකතු කළා
+}, async (zanta, mek, m, { from, reply, args, pushname, userSettings }) => {
     try {
-        // [වැදගත්]: ඩේටාබේස් සෙටින්ග්ස් ලබා ගැනීම
-        const settings = userSettings || global.CURRENT_BOT_SETTINGS;
+        const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
         const botName = settings.botName || config.DEFAULT_BOT_NAME || "ZANTA-MD";
 
         // --- 📂 1. අංකයක් Reply කළ විට ක්‍රියාත්මක වන කොටස ---
@@ -37,15 +56,10 @@ cmd({
             let featMsg = `*🚀 ZANTA-MD All Features*
 
 🖼️ *Media:* Getdp, Save status, Unlock view once image...
-
 🎶 *Download:* Song, YTmp4, FB, Tiktok, Apk
-
 🎨 *AI:* AI Image Gen (Genimg), Remove image Bg
-
 🛠️ *Tools:* ToURL, ToQR, Ping, Alive, To sticker
-
 🎮 *Fun:* Guess Game, Tod Game, Funtext
-
 ⚙️ *Admin:* Group Settings, Bot DB, Settings
 
 _සවිස්තරාත්මක ලැයිස්තුවට .menu ටයිප් කරන්න._`;
@@ -74,12 +88,13 @@ _ස්තුතියි!_`;
 3️⃣ *සම්බන්ධ වීමට (Contact Me)*
 ---
 
-> *${botName} Support System*`; // මෙතනත් botName update කළා
+> *${botName} Support System*`;
 
-        const helpImg = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true";
+        // Cache කරපු පින්තූරය භාවිතා කිරීම
+        const imageToDisplay = cachedHelpImage || { url: HELP_IMG_URL };
 
         const sentHelp = await zanta.sendMessage(from, { 
-            image: { url: helpImg }, 
+            image: imageToDisplay, 
             caption: mainHelp 
         }, { quoted: mek });
 
