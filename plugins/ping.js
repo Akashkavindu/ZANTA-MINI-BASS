@@ -2,8 +2,26 @@ const { cmd } = require("../command");
 const os = require('os');
 const { runtime } = require('../lib/functions');
 const config = require("../config");
+const axios = require('axios'); // පින්තූරය කලින් ලබා ගැනීමට
 
 const STATUS_IMAGE_URL = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true";
+
+// --- 🖼️ IMAGE PRE-LOAD LOGIC ---
+let cachedStatusImage = null;
+
+async function preLoadStatusImage() {
+    try {
+        const response = await axios.get(STATUS_IMAGE_URL, { responseType: 'arraybuffer' });
+        cachedStatusImage = Buffer.from(response.data);
+        console.log("✅ [CACHE] System status image pre-loaded.");
+    } catch (e) {
+        console.error("❌ [CACHE] Failed to pre-load system image:", e.message);
+        cachedStatusImage = { url: STATUS_IMAGE_URL };
+    }
+}
+
+// බොට් පණ ගැන්වෙන විටම පින්තූරය ලබා ගැනීම
+preLoadStatusImage();
 
 // දත්ත ප්‍රමාණයන් කියවීමට පහසු ලෙස සැකසීම
 function bytesToSize(bytes) {
@@ -41,17 +59,23 @@ async (zanta, mek, m, { from, userSettings }) => {
 *🕒 UPTIME:* ${runtime(process.uptime())}
 
 *💻 PROCESS RESOURCES:*
-*┃ 🧠 Used RAM:* ${bytesToSize(memoryUsage.rss)}
-*┃ 📦 Buffer:* ${bytesToSize(memoryUsage.heapUsed)}
+*┃ 🧠 Total Memory (RSS):* ${bytesToSize(memoryUsage.rss)}
+*┃ 📦 Heap Used:* ${bytesToSize(memoryUsage.heapUsed)}
 *┃ 🏛️ Platform:* ${os.platform()} (${os.arch()})
 
 > *© ${botName} STATUS REPORT*`.trim();
 
+        // Cached පින්තූරය තිබේ නම් එය භාවිතා කරයි, නැතිනම් URL එක පාවිච්චි කරයි
+        const imageToDisplay = cachedStatusImage || { url: STATUS_IMAGE_URL };
+
         // අවසාන පණිවිඩය රූපය සමඟ යැවීම
         await zanta.sendMessage(from, {
-            image: { url: STATUS_IMAGE_URL },
+            image: imageToDisplay,
             caption: statusMessage
         }, { quoted: mek });
+
+        // පැරණි පණිවිඩය මැකීම
+        await zanta.sendMessage(from, { delete: loadingMsg.key });
 
     } catch (e) {
         console.error("[PING ERROR]", e);
