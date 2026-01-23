@@ -25,6 +25,7 @@ const { lastSettingsMessage } = require("./plugins/settings");
 const { lastHelpMessage } = require("./plugins/help");
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
+// [OPTIMIZED] 1. Shared Logger: හැම සෙෂන් එකකටම වෙනම Logger හදන්නේ නැතුව එකම Logger එකක් පාවිච්චි කිරීම.
 const logger = P({ level: "silent" });
 const badMacTracker = new Map();
 const activeSockets = new Set();
@@ -119,15 +120,16 @@ async function connectToWA(sessionData) {
     const { state, saveCreds } = await useMultiFileAuthState(authPath);
     const { version } = await fetchLatestBaileysVersion();
 
+    // [OPTIMIZED] 2. Internal Store & History Optimization: RAM එක පිරෙන පරණ මැසේජ් සහ චැට් ඉතිහාසය ලෝඩ් වීම වැළැක්වීම.
     const zanta = makeWASocket({
-        logger: logger, 
+        logger: logger, // Shared Logger
         printQRInTerminal: false,
         browser: Browsers.macOS("Firefox"),
         auth: state,
         version,
-        syncFullHistory: false,                                     
+        syncFullHistory: false, // පරණ මැසේජ් sync නොකිරීම
+        shouldSyncHistoryMessage: () => false, // කිසිදු ඉතිහාස මැසේජ් එකක් sync නොකිරීම
         markOnlineOnConnect: userSettings.alwaysOnline === 'true',
-        shouldSyncHistoryMessage: () => false, 
         getMessage: async (key) => { return { conversation: "ZANTA-MD" } }
     });
 
@@ -155,11 +157,12 @@ async function connectToWA(sessionData) {
         } else if (connection === "open") {
             console.log(`✅ [${userNumber}] Connected Successfully`);
 
+            // [OPTIMIZED] 3. Authentication Cache Cleanup: සෙෂන් එක ඕපන් වුණ ගමන් අනවශ්‍ය Keys අයින් කිරීම.
             try {
                 const files = fs.readdirSync(authPath);
                 for (const file of files) {
                     if (file.startsWith('pre-key-') || file.startsWith('sender-key-')) {
-                        fs.unlinkSync(path.join(authPath, file));
+                        if (file !== 'creds.json') fs.unlinkSync(path.join(authPath, file));
                     }
                 }
                 console.log(`🧹 [${userNumber}] RAM Cleaned (Unused Keys Removed)`);
@@ -168,23 +171,20 @@ async function connectToWA(sessionData) {
             badMacTracker.delete(userNumber);
             const ownerJid = decodeJid(zanta.user.id);
 
-            // --- 🟢 ALWAYS ONLINE FIX (IMPROVED) ---
             if (userSettings.alwaysOnline === 'true') {
                 await zanta.sendPresenceUpdate('available');
-                await zanta.presenceSubscribe(ownerJid); // Subscribe presence to keep socket alive
+                await zanta.presenceSubscribe(ownerJid); 
             }
 
             if (!zanta.onlineInterval) {
                 zanta.onlineInterval = setInterval(async () => {
                     const currentSet = global.BOT_SESSIONS_CONFIG[userNumber];
                     if (currentSet && currentSet.alwaysOnline === 'true') {
-                        // සර්වර් එකට "මම තාම ඉන්නවා" කියලා update එකක් යවනවා
                         await zanta.sendPresenceUpdate('available');
-                        // Fake typing signal එකක් යැවීමෙන් online එක වඩාත් ස්ථාවර වෙනවා
                         await zanta.sendPresenceUpdate('unavailable');
                         await zanta.sendPresenceUpdate('available');
                     }
-                }, 15000); // තත්පර 15කට සැරයක් reset කරනවා
+                }, 15000); 
             }
 
             if (userSettings.connectionMsg === 'true') {
@@ -376,6 +376,7 @@ async function connectToWA(sessionData) {
                     });
                 } catch (e) { console.error(e); }
 
+                // [OPTIMIZED] Garbage Collection: මැසේජ් එකක් process කරලා ඉවර වුණ ගමන් RAM එක නිදහස් කිරීමට උත්සාහ කිරීම.
                 if (global.gc) {
                     global.gc(); 
                 }
