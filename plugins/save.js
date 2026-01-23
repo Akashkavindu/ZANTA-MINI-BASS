@@ -1,5 +1,5 @@
 const { cmd } = require("../command");
-const { downloadContentFromMessage } = require("@zassxd/baileys");
+const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
 
 // 🖼️ SAVE View Once Image/Video Command
 cmd(
