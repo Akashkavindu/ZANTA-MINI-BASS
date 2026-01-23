@@ -1,5 +1,5 @@
 const { cmd } = require("../command");
-const { getContentType, downloadContentFromMessage } = require("@zassxd/baileys"); 
+const { getContentType, downloadContentFromMessage } = require("@whiskeysockets/baileys"); 
 const config = require("../config"); 
 
 cmd(
