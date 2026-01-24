@@ -25,11 +25,14 @@ const { lastSettingsMessage } = require("./plugins/settings");
 const { lastHelpMessage } = require("./plugins/help");
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
-// [OPTIMIZED] 1. Shared Logger: හැම සෙෂන් එකකටම වෙනම Logger හදන්නේ නැතුව එකම Logger එකක් පාවිච්චි කිරීම.
+// [OPTIMIZED] 1. Shared Logger
 const logger = P({ level: "silent" });
 const badMacTracker = new Map();
 const activeSockets = new Set();
 const lastWorkTypeMessage = new Map(); 
+
+// [ADDED] Temporary storage for Anti-Delete (Inbox Only)
+const msgStorage = new Map();
 
 global.BOT_SESSIONS_CONFIG = {};
 
@@ -120,15 +123,14 @@ async function connectToWA(sessionData) {
     const { state, saveCreds } = await useMultiFileAuthState(authPath);
     const { version } = await fetchLatestBaileysVersion();
 
-    // [OPTIMIZED] 2. Internal Store & History Optimization: RAM එක පිරෙන පරණ මැසේජ් සහ චැට් ඉතිහාසය ලෝඩ් වීම වැළැක්වීම.
     const zanta = makeWASocket({
-        logger: logger, // Shared Logger
+        logger: logger, 
         printQRInTerminal: false,
         browser: Browsers.macOS("Firefox"),
         auth: state,
         version,
-        syncFullHistory: false, // පරණ මැසේජ් sync නොකිරීම
-        shouldSyncHistoryMessage: () => false, // කිසිදු ඉතිහාස මැසේජ් එකක් sync නොකිරීම
+        syncFullHistory: false, 
+        shouldSyncHistoryMessage: () => false, 
         markOnlineOnConnect: userSettings.alwaysOnline === 'true',
         getMessage: async (key) => { return { conversation: "ZANTA-MD" } }
     });
@@ -157,7 +159,6 @@ async function connectToWA(sessionData) {
         } else if (connection === "open") {
             console.log(`✅ [${userNumber}] Connected Successfully`);
 
-            // [OPTIMIZED] 3. Authentication Cache Cleanup: සෙෂන් එක ඕපන් වුණ ගමන් අනවශ්‍ය Keys අයින් කිරීම.
             try {
                 const files = fs.readdirSync(authPath);
                 for (const file of files) {
@@ -207,6 +208,43 @@ async function connectToWA(sessionData) {
         const sender = mek.key.participant || mek.key.remoteJid;
         const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
 
+        // [ADDED] Anti-Delete Core Logic (Inbox Text Messages Only)
+        const isGroup = from.endsWith("@g.us");
+        const type = getContentType(mek.message);
+
+        // 1. Save Text Messages if Anti-Delete is ON and not in a Group
+        if (userSettings.antidelete === 'true' && !isGroup && !mek.key.fromMe && type === 'conversation') {
+            const messageId = mek.key.id;
+            msgStorage.set(messageId, mek);
+            // Clear message from memory after 2 minutes (120,000 ms)
+            setTimeout(() => {
+                if (msgStorage.has(messageId)) msgStorage.delete(messageId);
+            }, 120000);
+        }
+
+        // 2. Detect Deleted Messages
+        if (mek.message?.protocolMessage?.type === 0) {
+            const deletedId = mek.message.protocolMessage.key.id;
+            const oldMsg = msgStorage.get(deletedId);
+            if (oldMsg) {
+                const deletedText = oldMsg.message.conversation;
+                await zanta.sendMessage(from, {
+                    text: `🛡️ *ZANTA-MD ANTI-DELETE* 🛡️\n\n*Message:* ${deletedText}`,
+                    contextInfo: {
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                            newsletterJid: '120363406265537739@newsletter',
+                            newsletterName: '𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑶𝑭𝑭𝑰𝑪𝑰𝑨𝑳 </>',
+                            serverMessageId: 100
+                        }
+                    }
+                });
+                msgStorage.delete(deletedId);
+            }
+            return;
+        }
+
         if (from === "status@broadcast") {
             if (userSettings.autoStatusSeen === 'true') {
                 await zanta.readMessages([mek.key]);
@@ -217,8 +255,6 @@ async function connectToWA(sessionData) {
             return; 
         }
 
-        const isGroup = from.endsWith("@g.us");
-        const type = getContentType(mek.message);
         let body = (type === "conversation") ? mek.message.conversation : (mek.message[type]?.text || mek.message[type]?.caption || "");
 
         let isButton = false;
@@ -376,7 +412,7 @@ async function connectToWA(sessionData) {
                     });
                 } catch (e) { console.error(e); }
 
-                // [OPTIMIZED] Garbage Collection: මැසේජ් එකක් process කරලා ඉවර වුණ ගමන් RAM එක නිදහස් කිරීමට උත්සාහ කිරීම.
+                // [OPTIMIZED] Garbage Collection
                 if (global.gc) {
                     global.gc(); 
                 }
