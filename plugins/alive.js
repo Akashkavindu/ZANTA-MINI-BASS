@@ -10,7 +10,7 @@ let cachedAliveImage = null;
 
 async function preLoadAliveImage() {
     try {
-        const imageUrl = config.ALIVE_IMG || "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true";
+        const imageUrl = config.ALIVE_IMG || "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/zanta-md.png?raw=true";
         const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
         cachedAliveImage = Buffer.from(response.data);
         console.log("✅ [CACHE] Alive image pre-loaded successfully.");
