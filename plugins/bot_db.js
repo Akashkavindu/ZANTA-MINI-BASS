@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const config = require("../config");
 
 // --- ⚙️ MONGODB URI SETTINGS ---
-const MONGO_URI = "mongodb+srv://zanta-md:Akashkavindet/?appName=Cluster0";
+const MONGO_URI = "mongodb+srv://zanta-test:Akashkavindu12345@cluster0.qedizqe.mongodb.net/?appName=Cluster0";
 
 const SettingsSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
@@ -14,15 +14,16 @@ const SettingsSchema = new mongoose.Schema({
     autoRead: { type: String, default: "false" },
     autoTyping: { type: String, default: "false" },
     autoStatusSeen: { type: String, default: "true" },
-    autoStatusReact: { type: String, default: "false" },
+    autoStatusReact: { type: String, default: "true" },
+    // --- 🆕 ADDED: AUTO REACT SETTING ---
+    autoReact: { type: String, default: "true" }, 
     readCmd: { type: String, default: "false" },
     autoVoice: { type: String, default: "false" },
     autoReply: { type: String, default: "false" },
     connectionMsg: { type: String, default: "true" },
     workType: { type: String, default: "public" }, 
     buttons: { type: String, default: "true" }, 
-    // --- 🆕 [ADDED] ANTIDELETE SETTING ---
-    antidelete: { type: String, default: "true" }, 
+    antidelete: { type: String, default: "false" } // Anti-delete setting එකත් Schema එකේ තියෙන්න ඕන නිසා ඇඩ් කළා
 });
 
 const AutoReplySchema = new mongoose.Schema({
@@ -49,7 +50,7 @@ async function connectDB() {
             connectTimeoutMS: 30000,
             serverSelectionTimeoutMS: 30000,
         });
-        console.log("✅ MongoDB Connected Successfully with Buttons Support!");
+        console.log("✅ MongoDB Connected Successfully with Auto-React Support!");
     } catch (error) {
         console.error("❌ MongoDB Connection Error:", error);
     }
