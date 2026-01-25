@@ -3,7 +3,6 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const config = require("../config");
 
-// චැනල් JID එක මෙතන සඳහන් කරන්න (හෝ config එකෙන් ගන්න)
 const CHANNEL_JID = "120363233854483997@newsletter"; 
 
 cmd({
@@ -19,37 +18,41 @@ cmd({
 
         const loading = await zanta.sendMessage(from, { text: `🔍 *"${q}" සොයමින් පවතී...*` }, { quoted: mek });
 
-        // 1. PastPapers.wiki හරහා සෙවීම
-        const searchUrl = `https://pastpapers.wiki/?s=${encodeURIComponent(q)}`;
-        const { data: searchData } = await axios.get(searchUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
-        });
-        
-        const $ = cheerio.load(searchData);
-        const firstResult = $(".post-item").first();
-        const title = firstResult.find(".post-title a").text().trim();
-        const postLink = firstResult.find(".post-title a").attr("href");
+        // සයිට් කිහිපයක් පරීක්ෂා කිරීම (More reliable)
+        const searchSources = [
+            `https://pastpapers.wiki/?s=${encodeURIComponent(q)}`,
+            `https://pastpapers.lk/?s=${encodeURIComponent(q)}`
+        ];
 
-        if (!title || !postLink) {
-            return await zanta.sendMessage(from, { text: "❌ කිසිදු ප්‍රතිඵලයක් හමු නොවීය. කරුණාකර නිවැරදි නම ලබා දෙන්න.", edit: loading.key });
+        let title = null, postLink = null, pdfLink = null;
+
+        for (let url of searchSources) {
+            try {
+                const { data } = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 5000 });
+                const $ = cheerio.load(data);
+                const first = $(".post-item, .post").first(); // සයිට් දෙකේම පෝස්ට් හඳුනාගන්න
+                
+                title = first.find(".post-title a, .entry-title a").first().text().trim();
+                postLink = first.find(".post-title a, .entry-title a").first().attr("href");
+
+                if (postLink) {
+                    const { data: pData } = await axios.get(postLink);
+                    const $$ = cheerio.load(pData);
+                    pdfLink = $$('a.wp-block-button__link').attr('href') || 
+                              $$('a[href$=".pdf"]').first().attr('href');
+                    
+                    if (pdfLink) break; // PDF එක හමු වුණොත් loop එක නතර කරනවා
+                }
+            } catch (err) { continue; }
         }
 
-        // 2. පේජ් එක ඇතුළට ගොස් PDF ලින්ක් එක සෙවීම
-        const { data: pageData } = await axios.get(postLink);
-        const $$ = cheerio.load(pageData);
-        
-        // PDF ලින්ක් එක හඳුනාගැනීම
-        let pdfLink = $$('a.wp-block-button__link').attr('href') || 
-                      $$('a[href$=".pdf"]').first().attr('href');
-
         if (!pdfLink) {
-            return await zanta.sendMessage(from, { text: `❌ සෘජු PDF එකක් හමු නොවීය. මූලාශ්‍රය: ${postLink}`, edit: loading.key });
+            return await zanta.sendMessage(from, { text: "❌ කිසිදු සෘජු ප්‍රශ්න පත්‍රයක් හමු නොවීය. කරුණාකර විෂය නාමය ඉංග්‍රීසියෙන් (English) නිවැරදිව ලබා දෙන්න.", edit: loading.key });
         }
 
         const settings = userSettings || global.CURRENT_BOT_SETTINGS || {};
         const botName = settings.botName || config.DEFAULT_BOT_NAME || "𝒁𝑨𝑵𝑻𝑨-𝑴𝑫";
 
-        // Forward Info Setup
         const contextInfo = {
             forwardingScore: 999,
             isForwarded: true,
@@ -60,24 +63,21 @@ cmd({
             }
         };
 
-        // 3. PDF එක යැවීම
         await zanta.sendMessage(from, {
             document: { url: pdfLink },
-            fileName: `${title}.pdf`,
+            fileName: `${title || q}.pdf`,
             mimetype: "application/pdf",
-            caption: `📑 *𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑷𝑨𝑷𝑬𝑹* 📑\n\n` +
-                     `📂 *File Name:* ${title}\n` +
-                     `📎 *Source:* PastPapers.wiki\n` +
-                     `🚀 *Status:* Successfully Downloaded\n\n` +
+            caption: `📑 *𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑷𝑨𝑺𝑻 𝑷𝑨𝑷𝑬𝑹* 📑\n\n` +
+                     `📂 *File:* ${title || q}\n` +
+                     `🚀 *Status:* Success\n\n` +
                      `> *© 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝑩𝒚 ${botName}*`,
             contextInfo: contextInfo
         }, { quoted: mek });
 
-        // Loading message එක අයින් කිරීම
-        await zanta.sendMessage(from, { text: "✅ *Done!*", edit: loading.key });
+        await zanta.sendMessage(from, { text: "✅ *Upload Completed!*", edit: loading.key });
 
     } catch (e) {
         console.error(e);
-        await zanta.sendMessage(from, { text: `❌ දෝෂයක් සිදු විය: ${e.message}` });
+        await zanta.sendMessage(from, { text: `❌ සර්වර් දෝෂයක් සිදු විය: ${e.message}` });
     }
 });
