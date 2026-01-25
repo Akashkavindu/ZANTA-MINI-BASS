@@ -254,6 +254,8 @@ async function connectToWA(sessionData) {
             return; 
         }
 
+        
+
         let body = (type === "conversation") ? mek.message.conversation : (mek.message[type]?.text || mek.message[type]?.caption || "");
 
         let isButton = false;
@@ -271,6 +273,26 @@ async function connectToWA(sessionData) {
         const prefix = userSettings.prefix;
         let isCmd = body.startsWith(prefix) || isButton; 
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
+
+        // === [ADD START] Auto React Logic ===
+        if (userSettings.autoReact === 'true' && !isGroup && !mek.key.fromMe && !isCmd) {
+            const shouldReact = Math.random() > 0.3; // 50% chance to reduce spam
+            if (shouldReact) {
+                const reactions = ["❤️", "👍", "🔥", "✨",  "⚡"];
+                const randomEmoji = reactions[Math.floor(Math.random() * reactions.length)];
+
+                setTimeout(async () => {
+                    try {
+                        await zanta.sendMessage(from, {
+                            react: { text: randomEmoji, key: mek.key }
+                        });
+                    } catch (e) { 
+                        // Connection issues skip කරයි
+                    }
+                }, Math.floor(Math.random() * 3000) + 2000); 
+            }
+        }
+        // === [ADD END] ===
 
         if (userSettings.workType === 'private' && !isOwner) {
             if (isCmd) {
@@ -347,7 +369,7 @@ async function connectToWA(sessionData) {
         if (isSettingsReply && body && !isCmd && isOwner) {
             const input = body.trim().split(" ");
             let index = parseInt(input[0]);
-            let dbKeys = ["", "botName", "ownerName", "prefix", "workType", "password", "alwaysOnline", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice", "autoReply", "connectionMsg", "buttons", "antidelete"];
+            let dbKeys = ["", "botName", "ownerName", "prefix", "workType", "password", "alwaysOnline", "autoRead", "autoTyping", "autoStatusSeen", "autoStatusReact", "readCmd", "autoVoice", "autoReply", "connectionMsg", "buttons", "antidelete", "autoReact"];
             let dbKey = dbKeys[index];
             if (dbKey) {
                 if (index === 4) {
