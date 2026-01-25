@@ -2,7 +2,7 @@ const { cmd } = require("../command");
 const { updateSetting } = require("./bot_db");
 const config = require("../config");
 
-const SETTINGS_IMG = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/zanta-md.png?raw=true";
+const SETTINGS_IMG = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/Gemini_Generated_Image_4xcl2e4xcl2e4xcl.png?raw=true";
 
 // Settings Reply එක හඳුනා ගැනීමට
 const lastSettingsMessage = new Map();
@@ -23,46 +23,41 @@ cmd({
     const ownerName = settings.ownerName || config.DEFAULT_OWNER_NAME || "Owner";
     const botPrefix = settings.prefix || prefix || ".";
     const webPass = settings.password === 'not_set' ? "Not Set ❌" : "Set ✅";
-
-    // Work Type අගය ලබා ගැනීම
     const workType = (settings.workType || "public").toUpperCase();
 
     // --- 📊 Status Indicators ---
-    const getStatus = (val) => val === 'true' ? '✅ ON' : '❌ OFF';
+    const getStatus = (val) => val === 'true' ? '『 ✅ ON 』' : '『❌  OFF 』';
 
-    let statusText = `✨ *${botName.toUpperCase()} DASHBOARD* ✨\n\n`;
-    
-    statusText += `👤 *Owner:* ${ownerName}\n`;
-    statusText += `⚙️ *Prefix:* [ ${botPrefix} ]\n`;
-    statusText += `🔓 *Work Type:* ${workType}\n`;
-    statusText += `🔐 *Web Pass:* ${webPass}\n\n`;
+    let statusText = `⚡ *${botName.toUpperCase()} PREMIUM DASHBOARD* ⚡\n\n`;
 
-    statusText += `╔════════════════════╗\n`;
-    statusText += `┋ 0️⃣1️⃣ *Bot Name:* ${botName}\n`;
-    statusText += `┋ 0️⃣2️⃣ *Owner Name:* ${ownerName}\n`;
-    statusText += `┋ 0️⃣3️⃣ *Prefix:* ${botPrefix}\n`;
-    statusText += `┋ 0️⃣4️⃣ *Work Type:* ${workType}\n`;
-    statusText += `┋ 0️⃣5️⃣ *Web Pass:* ${webPass}\n`;
-    statusText += `┋ 0️⃣6️⃣ *Always Online:* ${getStatus(settings.alwaysOnline)}\n`;
-    statusText += `┋ 0️⃣7️⃣ *Auto Read:* ${getStatus(settings.autoRead)}\n`;
-    statusText += `┋ 0️⃣8️⃣ *Auto Typing:* ${getStatus(settings.autoTyping)}\n`;
-    statusText += `┋ 0️⃣9️⃣ *Status Seen:* ${getStatus(settings.autoStatusSeen)}\n`;
-    statusText += `┋ 1️⃣0️⃣ *Status React:* ${getStatus(settings.autoStatusReact)}\n`;
-    statusText += `┋ 1️⃣1️⃣ *Read Cmd:* ${getStatus(settings.readCmd)}\n`;
-    statusText += `┋ 1️⃣2️⃣ *Auto Voice:* ${getStatus(settings.autoVoice)}\n`;
-    statusText += `┋ 1️⃣3️⃣ *Auto Reply:* ${getStatus(settings.autoReply)}\n`;
-    statusText += `┋ 1️⃣4️⃣ *Connect Msg:* ${getStatus(settings.connectionMsg)}\n`;
-    statusText += `┋ 1️⃣5️⃣ *Buttons:* ${getStatus(settings.buttons)}\n`;
-    // --- 🆕 [ADDED] ANTIDELETE SETTING ---
-    statusText += `┋ 1️⃣6️⃣ *Anti Delete:* ${getStatus(settings.antidelete)}\n`;
-    statusText += `╚════════════════════╝\n\n`;
+    statusText += `*—「 BASIC CONFIGS 」—*\n\n`;
+    statusText += `01. 🤖 *Bot Name:* ${botName}\n`;
+    statusText += `02. 👤 *Owner Name:* ${ownerName}\n`;
+    statusText += `03. 🎮 *Bot Prefix:* [ ${botPrefix} ]\n`;
+    statusText += `04. 🔐 *Work Mode:* ${workType}\n`;
+    statusText += `05. 🔑 *Web Password:* ${webPass}\n\n`;
 
-    statusText += `*📝 භාවිතා කරන ආකාරය:* \n`;
-    statusText += `අගය වෙනස් කිරීමට අංකය සහ අදාළ අගය Reply කරන්න.\n\n`;
-    statusText += `*E.g:* \`16 on\` (Anti-Delete සක්‍රිය කිරීමට)\n`;
-    statusText += `*E.g:* \`4 \` (Private Mode කිරීමට)\n`;
-    statusText += `*E.g:* \`6 off\` (Always Online අක්‍රිය කිරීමට)\n\n`;
-    statusText += `> *Powered by ZANTA-MD*`;
+    statusText += `*—「 BOT SETTINGS 」—*\n\n`;
+    statusText += `06. 🚀 *Always Online:* ${getStatus(settings.alwaysOnline)}\n`;
+    statusText += `07. 📩 *Auto Read:* ${getStatus(settings.autoRead)}\n`;
+    statusText += `08. ⌨️ *Auto Typing:* ${getStatus(settings.autoTyping)}\n`;
+    statusText += `09. 👁️ *Status Seen:* ${getStatus(settings.autoStatusSeen)}\n`;
+    statusText += `10. ❤️ *Status React:* ${getStatus(settings.autoStatusReact)}\n`;
+    statusText += `11. 📑 *Read Cmd:* ${getStatus(settings.readCmd)}\n`;
+    statusText += `12. 🎙️ *Auto Voice:* ${getStatus(settings.autoVoice)}\n`;
+    statusText += `13. 🤖 *Auto Reply:* ${getStatus(settings.autoReply)}\n`;
+    statusText += `14. 🔔 *Connect Msg:* ${getStatus(settings.connectionMsg)}\n`;
+    statusText += `15. 🔘 *Buttons Mod:* ${getStatus(settings.buttons)}\n`;
+    statusText += `16. 🛡️ *Anti-Delete:* ${getStatus(settings.antidelete)}\n`;
+    statusText += `17. ⚡ *Auto React:* ${getStatus(settings.autoReact)}\n\n`;
+
+    statusText += `*–––––––––––––––––––––––––*\n`;
+    statusText += `*💡 EDIT SETTINGS:* \n`;
+    statusText += `Reply with number + value.\n`;
+    statusText += `*E.g:* \`17 on\` (Auto React ON)\n`;
+    statusText += `*E.g:* \`1 MyBot\` (Bot Name change)\n`;
+    statusText += `*–––––––––––––––––––––––––*\n`;
+    statusText += `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴢᴀɴᴛᴀ-ᴍᴅ*`;
 
     const sentMsg = await zanta.sendMessage(from, {
         image: { url: SETTINGS_IMG },
