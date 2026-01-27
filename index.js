@@ -502,4 +502,4 @@ setTimeout(async () => {
         console.log("🚀 Exiting for scheduled restart.");
         process.exit(0);
     }, 5000);
-}, 40 * 60 * 1000);
+}, 60 * 60 * 1000);
