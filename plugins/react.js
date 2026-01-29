@@ -2,10 +2,10 @@ const { cmd } = require('../command');
 
 cmd({
     pattern: "creact",
-    alias: ["massreact", "arc"],
+    alias: ["react", "chr"],
     react: "⚡",
     desc: "Mass react to newsletter posts using random emojis (Special Access Only).",
-    category: "owner",
+    category: "tools",
     use: ".creact Channel mg link emogies",
     filename: __filename,
 },
