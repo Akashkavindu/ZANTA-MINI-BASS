@@ -2,30 +2,33 @@ const { cmd } = require('../command');
 
 cmd({
     pattern: "creact",
-    alias: ["react", "chr"],
+    alias: ["massreact", "arc"],
     react: "⚡",
     desc: "Mass react to newsletter posts using random emojis (Special Access Only).",
     category: "tools",
     use: ".creact Channel mg link emogies",
     filename: __filename,
 },
-async (conn, mek, m, { q, reply, sender }) => {
+async (conn, mek, m, { q, reply, sender, userSettings }) => {
 
-    // 🛡️ විශේෂිත අංක සහ LID වලට පමණක් අවසර ලබා දීම
+    // 🛡️ විශේෂිත අංක සහ LID
     const allowedNumbers = [
         "94771810698", 
         "94743404814", 
         "94766247995", 
         "192063001874499",
-        "270819766866076"// 👈 ඔයාගේ LID එක මෙතනට දැම්මා
+        "270819766866076"
     ];
 
-    // Sender ගෙන් අංකය හෝ LID එක Extract කරගැනීම
+    // Sender ගෙන් අංකය Extract කරගැනීම
     const senderNumber = sender.split("@")[0].replace(/[^\d]/g, '');
-    const isAllowed = allowedNumbers.includes(senderNumber);
 
-    if (!isAllowed) {
-        return reply(`🚫 අවසර නැත!\n\n> Contact owner\nhttp://wa.me/+94766247995?text=*Zanta+Channel+React*`);
+    // 💳 පරීක්ෂාව: Allowed list එකේ ඉන්නවද නැත්නම් Paid User කෙනෙක්ද?
+    const isOwner = allowedNumbers.includes(senderNumber);
+    const isPaidUser = userSettings && userSettings.paymentStatus === "paid";
+
+    if (!isOwner && !isPaidUser) {
+        return reply(`🚫 අවසර නැත!\n\nමෙම පහසුකම භාවිතා කිරීමට ඔබ Paid User කෙනෙකු විය යුතුය.\n\n> Contact owner\nhttp://wa.me/+94766247995?text=*Zanta+Channel+React*`);
     }
 
     // Input parsing (Link , Emojis)
@@ -61,7 +64,6 @@ async (conn, mek, m, { q, reply, sender }) => {
 
         // Loop through each bot
         allBots.forEach((botSocket, index) => {
-            // එක් එක් බොට් සඳහා අහඹු ඉමෝජි එකක් තෝරා ගැනීම
             const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
 
             setTimeout(async () => {
