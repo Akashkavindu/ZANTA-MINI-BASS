@@ -205,6 +205,7 @@ async function connectToWA(sessionData) {
     });
 
     activeSockets.add(zanta);
+    global.activeSockets.add(zanta);
 
     // FEATURE: CONNECTION STATUS UPDATES
     zanta.ev.on("connection.update", async (update) => {
