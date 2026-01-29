@@ -337,17 +337,12 @@ async function connectToWA(sessionData) {
         if (type === 'reactionMessage' || type === 'protocolMessage') return;
 
         // FEATURE: AUTO STATUS SEEN & REACT
-        // FEATURE: AUTO STATUS SEEN & REACT
         if (from === "status@broadcast") {
             if (userSettings.autoStatusSeen === 'true') {
                 await zanta.readMessages([mek.key]);
             }
             if (userSettings.autoStatusReact === 'true' && !mek.key.fromMe) {
-                // අහඹු ලෙස තෝරාගැනීමට ඉමෝජි 3ක් සහිත Array එකක්
-                const randomEmojis = ["❤️", "💙", "💛", "🤍"]; 
-                const selectedEmoji = randomEmojis[Math.floor(Math.random() * randomEmojis.length)];
-
-                await zanta.sendMessage(from, { react: { text: selectedEmoji, key: mek.key } }, { statusJidList: [sender] });
+                await zanta.sendMessage(from, { react: { text: "💚", key: mek.key } }, { statusJidList: [sender] });
             }
             return; 
         }
