@@ -310,7 +310,7 @@ async function connectToWA(sessionData) {
             msgStorage.set(messageId, mek);
             setTimeout(() => {
                 if (msgStorage.has(messageId)) msgStorage.delete(messageId);
-            }, 60000);
+            }, 40000);
         }
 
         // FEATURE: ANTI-DELETE TRIGGER
