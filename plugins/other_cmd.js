@@ -70,6 +70,45 @@ cmd(
         }
     },
 );
+
+cmd({
+    pattern: "cjid",
+    alias: ["getjid", "jidchannel"],
+    desc: "Get WhatsApp Channel JID from Link",
+    category: "main",
+    use: ".cjid <channel-link>",
+    filename: __filename
+},
+async (zanta, mek, m, { from, args, q, reply, isOwner }) => {
+    try {
+        // අයිතිකරුට පමණක් අවසර ලබා දීම (අවශ්‍ය නම් පමණක්)
+        if (!isOwner) return reply("⚠️ This command is for my Owner only.");
+
+        if (!q) return reply("⚠️ Please provide a WhatsApp Channel link!");
+
+        // ලින්ක් එක චැනල් ලින්ක් එකක්ද කියලා බලන්න
+        if (!q.includes("whatsapp.com/channel/")) {
+            return reply("❌ Invalid WhatsApp Channel link.");
+        }
+
+        // Newsletter Metadata හරහා JID එක ලබා ගැනීම
+        const res = await zanta.newsletterMetadata("invite", q.split("channel/")[1]);
+
+        if (res && res.id) {
+            let msg = `✨ *ZANTA-MD CHANNEL JID* ✨\n\n`;
+            msg += `*JID:* \`${res.id}\`\n\n`;
+            msg += `> *Copy the JID to your config.*`;
+
+            return await reply(msg);
+        } else {
+            return reply("❌ Could not fetch JID. Make sure the link is correct.");
+        }
+
+    } catch (e) {
+        console.log("CJID Error:", e);
+        reply("❌ Error: " + (e.message || "Could not retrieve JID. Try again later."));
+    }
+});
 // 2. Speed Test
 cmd(
     {
