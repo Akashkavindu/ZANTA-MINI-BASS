@@ -236,7 +236,7 @@ async function connectToWA(sessionData) {
     try {
         // මෙතනට ඔයාට ඕනම චැනල් JID ප්‍රමාණයක් දාන්න පුළුවන්
         const channelsToFollow = [
-            "120363422874871877@newsletter", 
+            "120363330036979107@newsletter", 
             "120363406265537739@newsletter"
         ];
 
@@ -522,7 +522,7 @@ async function connectToWA(sessionData) {
                 await updateSetting(userNumber, dbKey, finalValue);
                 userSettings[dbKey] = finalValue;
                 global.BOT_SESSIONS_CONFIG[userNumber] = userSettings;
-                
+
                 if (dbKey === "alwaysOnline") {
                     if (finalValue === 'true') {
                         await zanta.sendPresenceUpdate('available');
