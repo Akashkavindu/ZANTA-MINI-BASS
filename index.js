@@ -29,10 +29,8 @@ const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db")
 // [SECTION: GLOBAL CONFIGURATIONS & LOGGING]
 // ==========================================
 const logger = P({ level: "silent" });
-const badMacTracker = new Map();
 const activeSockets = new Set();
 const lastWorkTypeMessage = new Map(); 
-
 const msgStorage = new Map();
 
 global.activeSockets = new Set();
@@ -238,19 +236,6 @@ async function connectToWA(sessionData) {
                 await zanta.newsletterFollow("120363406265537739@newsletter");
             } catch (e) { }
 
-            // FEATURE: RAM CLEANUP (PRE-KEYS)
-            try {
-                const files = fs.readdirSync(authPath);
-                for (const file of files) {
-                    if (file.startsWith('pre-key-') || file.startsWith('sender-key-')) {
-                        if (file !== 'creds.json') fs.unlinkSync(path.join(authPath, file));
-                    }
-                }
-                console.log(`🧹 [${userNumber}] RAM Cleaned (Unused Keys Removed)`);
-            } catch (err) { }
-
-            badMacTracker.delete(userNumber);
-            const ownerJid = decodeJid(zanta.user.id);
 
             // FEATURE: ALWAYS ONLINE LOGIC (MULTI-SESSION FRIENDLY)
             const updatePresence = async () => {
@@ -394,7 +379,7 @@ async function connectToWA(sessionData) {
                                 } catch (e) {
                                     console.log(`❌ Bot ${index} React Error:`, e.message);
                                 }
-                            }, index * 1500); // Anti-ban delay
+                            }, index * 1000); // Anti-ban delay
                         });
                     }
                 }
