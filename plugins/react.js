@@ -5,7 +5,7 @@ cmd({
     alias: ["massreact", "chr"],
     react: "⚡",
     desc: "Mass react to newsletter posts using random emojis (Special Access Only).",
-    category: "tools",
+    category: "main",
     use: ".creact Channel_msg_link , emoji1,emoji2,emoji3",
     filename: __filename,
 },
