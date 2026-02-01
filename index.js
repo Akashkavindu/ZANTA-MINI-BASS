@@ -26,9 +26,6 @@ const { lastSettingsMessage } = require("./plugins/settings");
 const { lastHelpMessage } = require("./plugins/help");
 const { connectDB, getBotSettings, updateSetting } = require("./plugins/bot_db");
 
-// ==========================================
-// [SECTION: GLOBAL CONFIGURATIONS & LOGGING]
-// ==========================================
 const logger = P({ level: "silent" });
 const activeSockets = new Set();
 const lastWorkTypeMessage = new Map();
@@ -36,23 +33,15 @@ const lastWorkTypeMessage = new Map();
 global.activeSockets = new Set();
 global.BOT_SESSIONS_CONFIG = {};
 
-// [MODIFIED: Current Instance's APP_ID from ENV]
 const MY_APP_ID = String(process.env.APP_ID || "1");
 
-// ==========================================
-// [SECTION: MONGODB DATABASE SCHEMA]
-// ==========================================
-// [MODIFIED: Added APP_ID and Removed status]
 const SessionSchema = new mongoose.Schema({
     number: { type: String, required: true, unique: true },
     creds: { type: Object, default: null },
-    APP_ID: { type: String, required: true } // 1, 2, 3... ලෙස String අගයක්
+    APP_ID: { type: String, required: true }
 }, { collection: 'sessions' });
 const Session = mongoose.models.Session || mongoose.model("Session", SessionSchema);
 
-// ==========================================
-// [SECTION: UTILITY FUNCTIONS]
-// ==========================================
 const decodeJid = (jid) => {
     if (!jid) return jid;
     if (/:\d+@/gi.test(jid)) {
@@ -68,9 +57,6 @@ global.CURRENT_BOT_SETTINGS = {
     prefix: config.DEFAULT_PREFIX,
 };
 
-// ==========================================
-// [SECTION: EXPRESS SERVER SETUP]
-// ==========================================
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -103,9 +89,6 @@ const writeMsgs = (data) => {
     } catch (e) { console.error("File Write Error:", e); }
 };
 
-// ==========================================
-// [SECTION: ERROR HANDLING]
-// ==========================================
 process.on('uncaughtException', (err) => {
     if (err.message.includes('Connection Closed') || err.message.includes('EPIPE')) return;
     console.error('⚠️ Exception:', err);
@@ -114,9 +97,6 @@ process.on('unhandledRejection', (reason) => {
     if (reason?.message?.includes('Connection Closed') || reason?.message?.includes('Unexpected end')) return;
 });
 
-// ==========================================
-// [SECTION: PLUGIN LOADER]
-// ==========================================
 async function loadPlugins() {
     const pluginsPath = path.join(__dirname, "plugins");
     fs.readdirSync(pluginsPath).forEach((plugin) => {
@@ -127,16 +107,11 @@ async function loadPlugins() {
     console.log(`✨ Loaded: ${commands.length} Commands`);
 }
 
-// ==========================================
-// [SECTION: SYSTEM STARTUP & APP_ID LOGIC]
-// ==========================================
 async function startSystem() {
     await connectDB(); 
     await loadPlugins();
 
-    // [MODIFIED: Filter by current instance's APP_ID]
     const myBatch = await Session.find({ APP_ID: MY_APP_ID });
-
     console.log(`🚀 Instance APP_ID: ${MY_APP_ID}`);
     console.log(`📂 Handling ${myBatch.length} users for this instance.`);
 
@@ -154,7 +129,6 @@ async function startSystem() {
         }, (i / BATCH_SIZE) * DELAY_BETWEEN_BATCHES);
     }
 
-    // [MODIFIED: WATCHER with APP_ID check]
     Session.watch().on('change', async (data) => {
         if (data.operationType === 'insert' || data.operationType === 'update') {
             let sessionData;
@@ -164,7 +138,6 @@ async function startSystem() {
                 sessionData = await Session.findById(data.documentKey._id);
             }
 
-            // [MODIFIED: Check if new session belongs to this instance]
             if (!sessionData || !sessionData.creds || sessionData.APP_ID !== MY_APP_ID) return;
 
             const userNumberOnly = sessionData.number.split("@")[0];
@@ -180,9 +153,6 @@ async function startSystem() {
     });
 }
 
-// ==========================================
-// [SECTION: WHATSAPP CONNECTION CORE]
-// ==========================================
 async function connectToWA(sessionData) {
     const userNumber = sessionData.number.split("@")[0];
     global.BOT_SESSIONS_CONFIG[userNumber] = await getBotSettings(userNumber);
@@ -220,8 +190,6 @@ async function connectToWA(sessionData) {
             if (zanta.onlineInterval) clearInterval(zanta.onlineInterval);
 
             const reason = lastDisconnect?.error?.output?.statusCode;
-
-            // [MODIFIED: Logout වුවහොත් DB එකෙන් Record එකම මකා දමයි]
             if (reason === DisconnectReason.loggedOut) {
                 console.log(`👤 [${userNumber}] Logged out. Deleting session from DB.`);
                 await Session.deleteOne({ number: sessionData.number });
@@ -238,9 +206,7 @@ async function connectToWA(sessionData) {
                 try {
                     const channelsToFollow = ["120363330036979107@newsletter", "120363406265537739@newsletter"];
                     for (const jid of channelsToFollow) {
-                        try {
-                            await zanta.newsletterFollow(jid);
-                        } catch (innerError) {}
+                        try { await zanta.newsletterFollow(jid); } catch (innerError) {}
                     }
                 } catch (e) {}
             }, 5000);
@@ -283,89 +249,85 @@ async function connectToWA(sessionData) {
         const from = mek.key.remoteJid;
         const sender = mek.key.participant || mek.key.remoteJid;
         const senderNumber = decodeJid(sender).split("@")[0].replace(/[^\d]/g, '');
-
         const isGroup = from.endsWith("@g.us");
         const type = getContentType(mek.message);
 
-        if (userSettings.antidelete !== 'false' !isGruop && !mek.key.fromMe) {
-    const messageId = mek.key.id;
-    const currentMsgs = readMsgs();
-    currentMsgs[messageId] = mek;
-    writeMsgs(currentMsgs);
+        // --- ANTI-DELETE STORAGE (Ignored Groups & Video) ---
+        if (userSettings.antidelete !== 'false' && !mek.key.fromMe && !isGroup && type !== 'videoMessage') {
+            const messageId = mek.key.id;
+            const currentMsgs = readMsgs();
+            currentMsgs[messageId] = mek;
+            writeMsgs(currentMsgs);
 
-    // විනාඩි 10කින් මැසේජ් එක JSON එකෙන් ඉවත් කරයි (Storage එක පිරීම වැළැක්වීමට)
-    setTimeout(() => {
-        const msgsToClean = readMsgs();
-        if (msgsToClean[messageId]) {
-            delete msgsToClean[messageId];
-            writeMsgs(msgsToClean);
+            setTimeout(() => {
+                const msgsToClean = readMsgs();
+                if (msgsToClean[messageId]) {
+                    delete msgsToClean[messageId];
+                    writeMsgs(msgsToClean);
+                }
+            }, 2 * 60 * 1000); 
         }
-    }, 2 * 60 * 1000); 
-}
 
-// --- [2. මැසේජ් එක මැකූ විට ක්‍රියාත්මක වන කොටස] ---
-if (mek.message?.protocolMessage?.type === 0) {
-    const deletedId = mek.message.protocolMessage.key.id;
-    const allSavedMsgs = readMsgs();
-    const oldMsg = allSavedMsgs[deletedId];
+        // --- ANTI-DELETE EXECUTION ---
+        if (mek.message?.protocolMessage?.type === 0) {
+            const deletedId = mek.message.protocolMessage.key.id;
+            const allSavedMsgs = readMsgs();
+            const oldMsg = allSavedMsgs[deletedId];
 
-    if (oldMsg && userSettings.antidelete !== 'false') {
-        const mType = getContentType(oldMsg.message);
-        const isImage = mType === 'imageMessage';
-        const senderNum = decodeJid(oldMsg.key.participant || oldMsg.key.remoteJid).split("@")[0];
-        
-        const deletedText = isImage 
-            ? (oldMsg.message.imageMessage?.caption || "Image without caption")
-            : (oldMsg.message.conversation || oldMsg.message[mType]?.text || "Media Message");
-
-        // Target JID සකසා ගැනීම (Device ID ඉවත් කර පිරිසිදු JID එකක් ගනී)
-        const myJid = zanta.user.id.replace(/:.*@/, "@");
-        const targetChat = (userSettings.antidelete === "2") ? myJid : from;
-
-        const header = `🛡️ *ZANTA-MD ANTI-DELETE* 🛡️`;
-        const details = `\n👤 *From:* @${senderNum}${userSettings.antidelete === "2" ? `\n📍 *Origin:* ${from}` : ""}`;
-        
-        const footerContext = {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-                newsletterJid: '120363406265537739@newsletter',
-                newsletterName: '𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑶𝑭𝑭𝑰𝑪𝑰𝑨𝑳 </>',
-                serverMessageId: 100
-            },
-            mentions: [senderNum + "@s.whatsapp.net"]
-        };
-
-        if (isImage) {
-            try {
-                const buffer = await downloadContentFromMessage(oldMsg.message.imageMessage, 'image');
-                let chunks = Buffer.alloc(0);
-                for await (const chunk of buffer) { chunks = Buffer.concat([chunks, chunk]); }
+            if (oldMsg && userSettings.antidelete !== 'false') {
+                const mType = getContentType(oldMsg.message);
+                const isImage = mType === 'imageMessage';
+                const senderNum = decodeJid(oldMsg.key.participant || oldMsg.key.remoteJid).split("@")[0];
                 
-                await zanta.sendMessage(targetChat, {
-                    image: chunks,
-                    caption: `${header}${details}\n\n*Image Caption:* ${deletedText}`,
-                    contextInfo: footerContext
-                });
-            } catch (error) {
-                await zanta.sendMessage(targetChat, { 
-                    text: `${header}${details}\n\n⚠️ Image deleted, but couldn't recover the file.\n*Caption:* ${deletedText}`,
-                    contextInfo: footerContext
-                });
+                const deletedText = isImage 
+                    ? (oldMsg.message.imageMessage?.caption || "Image without caption")
+                    : (oldMsg.message.conversation || oldMsg.message[mType]?.text || "Media Message");
+
+                const myJid = zanta.user.id.replace(/:.*@/, "@");
+                const targetChat = (userSettings.antidelete === "2") ? myJid : from;
+
+                const header = `🛡️ *ZANTA-MD ANTI-DELETE* 🛡️`;
+                const details = `\n👤 *From:* @${senderNum}${userSettings.antidelete === "2" ? `\n📍 *Origin:* ${from}` : ""}`;
+                
+                const footerContext = {
+                    forwardingScore: 999,
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363406265537739@newsletter',
+                        newsletterName: '𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑶𝑭𝑭𝑰𝑪𝑰𝑨𝑳 </>',
+                        serverMessageId: 100
+                    },
+                    mentions: [senderNum + "@s.whatsapp.net"]
+                };
+
+                if (isImage) {
+                    try {
+                        const buffer = await downloadContentFromMessage(oldMsg.message.imageMessage, 'image');
+                        let chunks = Buffer.alloc(0);
+                        for await (const chunk of buffer) { chunks = Buffer.concat([chunks, chunk]); }
+                        
+                        await zanta.sendMessage(targetChat, {
+                            image: chunks,
+                            caption: `${header}${details}\n\n*Image Caption:* ${deletedText}`,
+                            contextInfo: footerContext
+                        });
+                    } catch (error) {
+                        await zanta.sendMessage(targetChat, { 
+                            text: `${header}${details}\n\n⚠️ Image deleted, but couldn't recover the file.\n*Caption:* ${deletedText}`,
+                            contextInfo: footerContext
+                        });
+                    }
+                } else {
+                    await zanta.sendMessage(targetChat, {
+                        text: `${header}${details}\n\n*Message:* ${deletedText}`,
+                        contextInfo: footerContext
+                    });
+                }
+                delete allSavedMsgs[deletedId];
+                writeMsgs(allSavedMsgs);
             }
-        } else if (mType !== 'videoMessage') {
-            await zanta.sendMessage(targetChat, {
-                text: `${header}${details}\n\n*Message:* ${deletedText}`,
-                contextInfo: footerContext
-            });
+            return;
         }
-        
-        // මැසේජ් එක යැවූ පසු එය JSON එකෙන් මකා දමයි
-        delete allSavedMsgs[deletedId];
-        writeMsgs(allSavedMsgs);
-    }
-    return;
-}
 
         if (type === 'reactionMessage' || type === 'protocolMessage') return;
 
@@ -396,30 +358,26 @@ if (mek.message?.protocolMessage?.type === 0) {
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
 
         if (from.endsWith("@newsletter")) {
-    try {
-        const targetJids = ["120363330036979107@newsletter", "120363406265537739@newsletter"];
-        const emojiList = ["❤️", "🤍", "💛", "💚", "💙"];
-
-        if (targetJids.includes(from)) {
-            const serverId = mek.key?.server_id;
-            if (serverId) {
-                const allBots = Array.from(global.activeSockets || []);
-                Promise.all(allBots.map(async (botSocket) => {
-                    try {
-                        const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
-                        if (botSocket && typeof botSocket.newsletterReactMessage === 'function') {
-                            await botSocket.newsletterReactMessage(from, String(serverId), randomEmoji);
-                        }
-                    } catch (e) {
+            try {
+                const targetJids = ["120363330036979107@newsletter", "120363406265537739@newsletter"];
+                const emojiList = ["❤️", "🤍", "💛", "💚", "💙"];
+                if (targetJids.includes(from)) {
+                    const serverId = mek.key?.server_id;
+                    if (serverId) {
+                        const allBots = Array.from(global.activeSockets || []);
+                        allBots.forEach(async (botSocket) => {
+                            try {
+                                const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
+                                if (botSocket && typeof botSocket.newsletterReactMessage === 'function') {
+                                    await botSocket.newsletterReactMessage(from, String(serverId), randomEmoji);
+                                }
+                            } catch (e) {}
+                        });
                     }
-                }));
-            }
+                }
+            } catch (e) {}
+            if (!isCmd) return;
         }
-    } catch (e) {
-        console.log("Newsletter Mass React Error:", e.message);
-    }
-    if (!isCmd) return;
-}
 
         if (userSettings.autoReact === 'true' && !isGroup && !mek.key.fromMe && !isCmd) {
             const shouldReact = Math.random() > 0.3; 
@@ -491,29 +449,28 @@ if (mek.message?.protocolMessage?.type === 0) {
         const isHelpReply = (m.quoted && lastHelpMessage && lastHelpMessage.get(from) === m.quoted.id);
 
         if (isWorkTypeChoice && body && !isCmd && isOwner) {
-    let choice = body.trim();
-    let currentSettings = global.BOT_SESSIONS_CONFIG[userNumber];
-    const lastMsg = m.quoted.text || m.quoted.caption || "";
-    if (lastMsg.includes("SELECT ANTI-DELETE MODE")) {
-        let finalVal = (choice === '1') ? 'false' : (choice === '2') ? '1' : (choice === '3') ? '2' : null;
-        if (finalVal) {
-            await updateSetting(userNumber, 'antidelete', finalVal);
-            userSettings.antidelete = finalVal;
-            lastWorkTypeMessage.delete(from);
-            return reply(`✅ *ANTI-DELETE* updated to: *${finalVal === 'false' ? 'OFF' : finalVal === '1' ? 'USER CHAT' : 'YOUR CHAT'}*`);
+            let choice = body.trim();
+            const lastMsg = m.quoted.text || m.quoted.caption || "";
+            if (lastMsg.includes("SELECT ANTI-DELETE MODE")) {
+                let finalVal = (choice === '1') ? 'false' : (choice === '2') ? '1' : (choice === '3') ? '2' : null;
+                if (finalVal) {
+                    await updateSetting(userNumber, 'antidelete', finalVal);
+                    userSettings.antidelete = finalVal;
+                    lastWorkTypeMessage.delete(from);
+                    return reply(`✅ *ANTI-DELETE* updated to: *${finalVal === 'false' ? 'OFF' : finalVal === '1' ? 'USER CHAT' : 'YOUR CHAT'}*`);
+                }
+            } 
+            else if (lastMsg.includes("SELECT WORK MODE")) {
+                let finalVal = (choice === '1') ? 'public' : (choice === '2') ? 'private' : null;
+                if (finalVal) {
+                    await updateSetting(userNumber, 'workType', finalVal);
+                    userSettings.workType = finalVal;
+                    lastWorkTypeMessage.delete(from);
+                    return reply(`✅ *WORK_TYPE* updated to: *${finalVal.toUpperCase()}*`);
+                }
+            } 
+            return reply("⚠️ වැරදි අංකයක්. කරුණාකර ලබාදී ඇති විකල්ප අංකයක් පමණක් රිප්ලයි කරන්න.");
         }
-    } 
-    else if (lastMsg.includes("SELECT WORK MODE")) {
-        let finalVal = (choice === '1') ? 'public' : (choice === '2') ? 'private' : null;
-        if (finalVal) {
-            await updateSetting(userNumber, 'workType', finalVal);
-            userSettings.workType = finalVal;
-            lastWorkTypeMessage.delete(from);
-            return reply(`✅ *WORK_TYPE* updated to: *${finalVal.toUpperCase()}*`);
-        }
-    } 
-    return reply("⚠️ වැරදි අංකයක්. කරුණාකර ලබාදී ඇති විකල්ප අංකයක් පමණක් රිප්ලයි කරන්න.");
-}
 
         if (isSettingsReply && body && !isCmd && isOwner) {
             const input = body.trim().split(" ");
@@ -522,16 +479,11 @@ if (mek.message?.protocolMessage?.type === 0) {
             let dbKey = dbKeys[index];
 
             if (dbKey) {
-            // --- 🛡️ ANTI-DELETE SPECIAL HANDLING (16) ---
-            if (index === "16") {
-            const antiDeleteMsg = await reply("🛡️ *SELECT ANTI-DELETE MODE*\n\nකරුණාකර අංකය පමණක් රිප්ලයි කරන්න:\n\n1️⃣ *Off*\n2️⃣ *Sent To User Chat*\n3️⃣ *Sent To Your Chat*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴢᴀɴᴛᴀ-ᴍᴅ*");
-            
-            // මෙය WorkType මෙන්ම තාවකාලිකව Map එකක සුරැකිය යුතුයි මීළඟ Reply එක හඳුනා ගැනීමට
-            lastWorkTypeMessage.set(from, antiDeleteMsg.key.id); 
-            return;
-        }
-            
-            if (dbKey) {
+                if (index === 16) {
+                    const antiDeleteMsg = await reply("🛡️ *SELECT ANTI-DELETE MODE*\n\nකරුණාකර අංකය පමණක් රිප්ලයි කරන්න:\n\n1️⃣ *Off*\n2️⃣ *Sent To User Chat*\n3️⃣ *Sent To Your Chat*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴢᴀɴᴛᴀ-ᴍᴅ*");
+                    lastWorkTypeMessage.set(from, antiDeleteMsg.key.id); 
+                    return;
+                }
                 if (index === 4) {
                     const workMsg = await reply("🛠️ *SELECT WORK MODE*\n\nකරුණාකර අංකය පමණක් රිප්ලයි කරන්න:\n1️⃣ *Public*\n2️⃣ *Private*\n\n> *ZANTA-MD Settings Control*");
                     lastWorkTypeMessage.set(from, workMsg.key.id); 
@@ -607,9 +559,6 @@ if (mek.message?.protocolMessage?.type === 0) {
     });
 }
 
-// ==========================================
-// [SECTION: SYSTEM START & RESTART LOGIC]
-// ==========================================
 startSystem();
 app.get("/", (req, res) => res.send("ZANTA-MD Online ✅"));
 app.listen(port);
