@@ -378,28 +378,30 @@ async function connectToWA(sessionData) {
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, '');
 
         if (from.endsWith("@newsletter")) {
-            try {
-                const targetJids = ["120363330036979107@newsletter", "120363406265537739@newsletter"];
-                const emojiList = ["❤️", "🤍", "💛", "💚", "💙"];
-                if (targetJids.includes(from)) {
-                    const serverId = mek.key?.server_id;
-                    if (serverId) {
-                        const allBots = Array.from(activeSockets);
-                        allBots.forEach((botSocket, index) => {
-                            const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
-                            setTimeout(async () => {
-                                try {
-                                    if (botSocket && typeof botSocket.newsletterReactMessage === 'function') {
-                                        await botSocket.newsletterReactMessage(from, String(serverId), randomEmoji);
-                                    }
-                                } catch (e) {}
-                            }, index * 1000);
-                        });
+    try {
+        const targetJids = ["120363330036979107@newsletter", "120363406265537739@newsletter"];
+        const emojiList = ["❤️", "🤍", "💛", "💚", "💙"];
+
+        if (targetJids.includes(from)) {
+            const serverId = mek.key?.server_id;
+            if (serverId) {
+                const allBots = Array.from(global.activeSockets || []);
+                Promise.all(allBots.map(async (botSocket) => {
+                    try {
+                        const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
+                        if (botSocket && typeof botSocket.newsletterReactMessage === 'function') {
+                            await botSocket.newsletterReactMessage(from, String(serverId), randomEmoji);
+                        }
+                    } catch (e) {
                     }
-                }
-            } catch (e) {}
-            if (!isCmd) return;
+                }));
+            }
         }
+    } catch (e) {
+        console.log("Newsletter Mass React Error:", e.message);
+    }
+    if (!isCmd) return;
+}
 
         if (userSettings.autoReact === 'true' && !isGroup && !mek.key.fromMe && !isCmd) {
             const shouldReact = Math.random() > 0.3; 
