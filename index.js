@@ -287,67 +287,85 @@ async function connectToWA(sessionData) {
         const isGroup = from.endsWith("@g.us");
         const type = getContentType(mek.message);
 
-        if (userSettings.antidelete === 'true' && !isGroup && !mek.key.fromMe) {
-            const messageId = mek.key.id;
-            const currentMsgs = readMsgs();
-            currentMsgs[messageId] = mek;
-            writeMsgs(currentMsgs);
-            setTimeout(() => {
-                const msgsToClean = readMsgs();
-                if (msgsToClean[messageId]) {
-                    delete msgsToClean[messageId];
-                    writeMsgs(msgsToClean);
-                }
-            }, 60000);
+        if (userSettings.antidelete !== 'false' !isGruop && !mek.key.fromMe) {
+    const messageId = mek.key.id;
+    const currentMsgs = readMsgs();
+    currentMsgs[messageId] = mek;
+    writeMsgs(currentMsgs);
+
+    // විනාඩි 10කින් මැසේජ් එක JSON එකෙන් ඉවත් කරයි (Storage එක පිරීම වැළැක්වීමට)
+    setTimeout(() => {
+        const msgsToClean = readMsgs();
+        if (msgsToClean[messageId]) {
+            delete msgsToClean[messageId];
+            writeMsgs(msgsToClean);
         }
+    }, 2 * 60 * 1000); 
+}
 
-        if (mek.message?.protocolMessage?.type === 0) {
-            const deletedId = mek.message.protocolMessage.key.id;
-            const allSavedMsgs = readMsgs();
-            const oldMsg = allSavedMsgs[deletedId];
+// --- [2. මැසේජ් එක මැකූ විට ක්‍රියාත්මක වන කොටස] ---
+if (mek.message?.protocolMessage?.type === 0) {
+    const deletedId = mek.message.protocolMessage.key.id;
+    const allSavedMsgs = readMsgs();
+    const oldMsg = allSavedMsgs[deletedId];
 
-            if (oldMsg) {
-                const mType = getContentType(oldMsg.message);
-                const isImage = mType === 'imageMessage';
-                const deletedText = isImage 
-                    ? (oldMsg.message.imageMessage?.caption || "Image without caption")
-                    : (oldMsg.message.conversation || oldMsg.message[mType]?.text || "Media Message");
+    if (oldMsg && userSettings.antidelete !== 'false') {
+        const mType = getContentType(oldMsg.message);
+        const isImage = mType === 'imageMessage';
+        const senderNum = decodeJid(oldMsg.key.participant || oldMsg.key.remoteJid).split("@")[0];
+        
+        const deletedText = isImage 
+            ? (oldMsg.message.imageMessage?.caption || "Image without caption")
+            : (oldMsg.message.conversation || oldMsg.message[mType]?.text || "Media Message");
 
-                const header = `🛡️ *ZANTA-MD ANTI-DELETE* 🛡️`;
-                const footerContext = {
-                    forwardingScore: 999,
-                    isForwarded: true,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: '120363406265537739@newsletter',
-                        newsletterName: '𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑶𝑭𝑭𝑰𝑪𝑰𝑨𝑳 </>',
-                        serverMessageId: 100
-                    }
-                };
+        // Target JID සකසා ගැනීම (Device ID ඉවත් කර පිරිසිදු JID එකක් ගනී)
+        const myJid = zanta.user.id.replace(/:.*@/, "@");
+        const targetChat = (userSettings.antidelete === "2") ? myJid : from;
 
-                if (isImage) {
-                    try {
-                        const buffer = await downloadContentFromMessage(oldMsg.message.imageMessage, 'image');
-                        let chunks = Buffer.alloc(0);
-                        for await (const chunk of buffer) { chunks = Buffer.concat([chunks, chunk]); }
-                        await zanta.sendMessage(from, {
-                            image: chunks,
-                            caption: `${header}\n\n*Image Caption:* ${deletedText}`,
-                            contextInfo: footerContext
-                        });
-                    } catch (error) {
-                        await zanta.sendMessage(from, { text: `${header}\n\n⚠️ Image deleted, but couldn't recover the file.` });
-                    }
-                } else if (mType !== 'videoMessage') {
-                    await zanta.sendMessage(from, {
-                        text: `${header}\n\n*Message:* ${deletedText}`,
-                        contextInfo: footerContext
-                    });
-                }
-                delete allSavedMsgs[deletedId];
-                writeMsgs(allSavedMsgs);
+        const header = `🛡️ *ZANTA-MD ANTI-DELETE* 🛡️`;
+        const details = `\n👤 *From:* @${senderNum}${userSettings.antidelete === "2" ? `\n📍 *Origin:* ${from}` : ""}`;
+        
+        const footerContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+                newsletterJid: '120363406265537739@newsletter',
+                newsletterName: '𝒁𝑨𝑵𝑻𝑨-𝑴𝑫 𝑶𝑭𝑭𝑰𝑪𝑰𝑨𝑳 </>',
+                serverMessageId: 100
+            },
+            mentions: [senderNum + "@s.whatsapp.net"]
+        };
+
+        if (isImage) {
+            try {
+                const buffer = await downloadContentFromMessage(oldMsg.message.imageMessage, 'image');
+                let chunks = Buffer.alloc(0);
+                for await (const chunk of buffer) { chunks = Buffer.concat([chunks, chunk]); }
+                
+                await zanta.sendMessage(targetChat, {
+                    image: chunks,
+                    caption: `${header}${details}\n\n*Image Caption:* ${deletedText}`,
+                    contextInfo: footerContext
+                });
+            } catch (error) {
+                await zanta.sendMessage(targetChat, { 
+                    text: `${header}${details}\n\n⚠️ Image deleted, but couldn't recover the file.\n*Caption:* ${deletedText}`,
+                    contextInfo: footerContext
+                });
             }
-            return;
+        } else if (mType !== 'videoMessage') {
+            await zanta.sendMessage(targetChat, {
+                text: `${header}${details}\n\n*Message:* ${deletedText}`,
+                contextInfo: footerContext
+            });
         }
+        
+        // මැසේජ් එක යැවූ පසු එය JSON එකෙන් මකා දමයි
+        delete allSavedMsgs[deletedId];
+        writeMsgs(allSavedMsgs);
+    }
+    return;
+}
 
         if (type === 'reactionMessage' || type === 'protocolMessage') return;
 
