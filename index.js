@@ -343,24 +343,27 @@ if (userSettings.alwaysOnline === "true") {
         const isOwner = mek.key.fromMe || senderNumber === config.OWNER_NUMBER.replace(/[^\d]/g, "");
 
         // Newsletter Reactions
-        if (from.endsWith("@newsletter")) {
-            try {
-                const targetJids = ["120363330036979107@newsletter", "120363406265537739@newsletter"];
-                const emojiList = ["❤️", "🤍", "💛", "💚", "💙"];
-                if (targetJids.includes(from)) {
-                    const serverId = mek.key?.server_id;
-                    if (serverId) {
-                        Array.from(activeSockets).forEach((botSocket, index) => {
-                            const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
-                            setTimeout(async () => {
-                                try { if (botSocket?.newsletterReactMessage) await botSocket.newsletterReactMessage(from, String(serverId), randomEmoji); } catch (e) {}
-                            }, index * 1000);
-                        });
+       if (from.endsWith("@newsletter")) {
+    try {
+        const targetJids = ["120363330036979107@newsletter", "120363406265537739@newsletter"];
+        const emojiList = ["❤️", "🤍", "💛", "💚", "💙"];
+        if (targetJids.includes(from)) {
+            const serverId = mek.key?.server_id;
+            if (serverId) {
+                Array.from(activeSockets).forEach(async (botSocket) => {
+                    const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
+                    try {
+                        if (botSocket?.newsletterReactMessage) {
+                            await botSocket.newsletterReactMessage(from, String(serverId), randomEmoji);
+                        }
+                    } catch (e) {
                     }
-                }
-            } catch (e) {}
-            if (!isCmd) return;
+                });
+            }
         }
+    } catch (e) {}
+    if (!isCmd) return;
+}
 
         // Auto React to messages
         if (userSettings.autoReact === "true" && !isGroup && !mek.key.fromMe && !isCmd) {
