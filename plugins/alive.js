@@ -1,7 +1,7 @@
 const { cmd, commands } = require('../command');
 const config = require('../config');
 const aliveMsg = require('./aliveMsg');
-const axios = require('axios'); // පින්තූරය කලින් Download කර ගැනීමට
+const axios = require('axios'); 
 
 const CHANNEL_JID = "120363406265537739@newsletter"; 
 
@@ -10,17 +10,17 @@ let cachedAliveImage = null;
 
 async function preLoadAliveImage() {
     try {
+        // මෙතනදී config එකේ තියෙන default image එක cache කරගන්නවා
         const imageUrl = config.ALIVE_IMG || "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/zanta-md.png?raw=true";
         const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
         cachedAliveImage = Buffer.from(response.data);
         console.log("✅ [CACHE] Alive image pre-loaded successfully.");
     } catch (e) {
         console.error("❌ [CACHE] Failed to pre-load alive image:", e.message);
-        cachedAliveImage = { url: config.ALIVE_IMG }; // වැරදුනොත් URL එකම පාවිච්චි කරයි
+        cachedAliveImage = null; 
     }
 }
 
-// බොට් පණ ගැන්වෙන විටම පින්තූරය ගන්න
 preLoadAliveImage();
 
 cmd({
@@ -43,12 +43,16 @@ async (zanta, mek, m, { from, reply, userSettings }) => {
             .replace(/{OWNER_NUMBER}/g, config.OWNER_NUMBER)
             .replace(/{PREFIX}/g, prefix);
 
-        // පින්තූරය තෝරා ගැනීම (Cache එකෙන් හෝ Config එකෙන්)
-        const imageToDisplay = cachedAliveImage || { url: config.ALIVE_IMG };
+        // --- 🖼️ IMAGE LOGIC: DB එකේ තියෙන එක මුලින් බලනවා, නැතිනම් Cache/Config පාවිච්චි කරනවා ---
+        let imageToDisplay;
+        if (settings.botImage && settings.botImage !== "null" && settings.botImage.startsWith("http")) {
+            imageToDisplay = { url: settings.botImage };
+        } else {
+            imageToDisplay = cachedAliveImage || { url: config.ALIVE_IMG };
+        }
 
         if (isButtonsOn) {
-            // --- 🔵 BUTTONS ON MODE (Image + Buttons in One Message) ---
-
+            // --- 🔵 BUTTONS ON MODE ---
             return await zanta.sendMessage(from, {
                 image: imageToDisplay, 
                 caption: finalMsg,
@@ -72,7 +76,7 @@ async (zanta, mek, m, { from, reply, userSettings }) => {
             }, { quoted: mek });
 
         } else {
-            // --- 🟢 BUTTONS OFF MODE (Text Only/Normal) ---
+            // --- 🟢 BUTTONS OFF MODE ---
             return await zanta.sendMessage(from, {
                 image: imageToDisplay,
                 caption: finalMsg,
