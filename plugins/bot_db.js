@@ -9,21 +9,22 @@ const SettingsSchema = new mongoose.Schema({
     botName: { type: String, default: config.DEFAULT_BOT_NAME },
     ownerName: { type: String, default: config.DEFAULT_OWNER_NAME },
     prefix: { type: String, default: config.DEFAULT_PREFIX },
-    password: { type: String, default: "not_set" },
-    alwaysOnline: { type: String, default: "false" },
-    autoRead: { type: String, default: "false" },
-    autoTyping: { type: String, default: "false" },
-    autoStatusSeen: { type: String, default: "true" },
-    autoStatusReact: { type: String, default: "true" },
-    // --- 🆕 ADDED: AUTO REACT SETTING ---
-    autoReact: { type: String, default: "false" }, 
-    readCmd: { type: String, default: "false" },
-    autoVoice: { type: String, default: "false" },
-    autoReply: { type: String, default: "false" },
-    connectionMsg: { type: String, default: "true" },
-    workType: { type: String, default: "public" }, 
-    buttons: { type: String, default: "true" }, 
-    antidelete: { type: String, default: "false" } // Anti-delete setting එකත් Schema එකේ තියෙන්න ඕන නිසා ඇඩ් කළා
+    workType: { type: String, default: "public" }, // 04
+    password: { type: String, default: "not_set" }, // 05
+    botImage: { type: String, default: "null" },    // 06 (🆕 Added)
+    alwaysOnline: { type: String, default: "false" }, // 07
+    autoRead: { type: String, default: "false" }, // 08
+    autoTyping: { type: String, default: "false" }, // 09
+    autoStatusSeen: { type: String, default: "true" }, // 10
+    autoStatusReact: { type: String, default: "true" }, // 11
+    readCmd: { type: String, default: "false" }, // 12
+    autoVoice: { type: String, default: "false" }, // 13
+    autoReply: { type: String, default: "false" }, // 14
+    connectionMsg: { type: String, default: "true" }, // 15
+    buttons: { type: String, default: "true" }, // 16
+    antidelete: { type: String, default: "false" }, // 17
+    autoReact: { type: String, default: "false" }, // 18
+    paymentStatus: { type: String, default: "free" } // Paid user check එකට
 });
 
 const AutoReplySchema = new mongoose.Schema({
