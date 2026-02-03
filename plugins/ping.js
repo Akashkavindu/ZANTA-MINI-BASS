@@ -2,7 +2,7 @@ const { cmd } = require("../command");
 const os = require('os');
 const { runtime } = require('../lib/functions');
 const config = require("../config");
-const axios = require('axios'); // පින්තූරය කලින් ලබා ගැනීමට
+const axios = require('axios'); 
 
 const STATUS_IMAGE_URL = "https://github.com/Akashkavindu/ZANTA_MD/blob/main/images/zanta-md.png?raw=true";
 
@@ -16,14 +16,12 @@ async function preLoadStatusImage() {
         console.log("✅ [CACHE] System status image pre-loaded.");
     } catch (e) {
         console.error("❌ [CACHE] Failed to pre-load system image:", e.message);
-        cachedStatusImage = { url: STATUS_IMAGE_URL };
+        cachedStatusImage = null;
     }
 }
 
-// බොට් පණ ගැන්වෙන විටම පින්තූරය ලබා ගැනීම
 preLoadStatusImage();
 
-// දත්ත ප්‍රමාණයන් කියවීමට පහසු ලෙස සැකසීම
 function bytesToSize(bytes) {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     if (bytes === 0) return '0 Byte';
@@ -48,7 +46,6 @@ async (zanta, mek, m, { from, userSettings }) => {
         // Loading message
         const loadingMsg = await zanta.sendMessage(from, { text: "⚙️ *Checking System Status...*" }, { quoted: mek });
 
-        // Memory usage දත්ත ලබා ගැනීම
         const memoryUsage = process.memoryUsage();
         const latency = Date.now() - startTime;
 
@@ -65,8 +62,13 @@ async (zanta, mek, m, { from, userSettings }) => {
 
 > *© ${botName} STATUS REPORT*`.trim();
 
-        // Cached පින්තූරය තිබේ නම් එය භාවිතා කරයි, නැතිනම් URL එක පාවිච්චි කරයි
-        const imageToDisplay = cachedStatusImage || { url: STATUS_IMAGE_URL };
+        // --- 🖼️ IMAGE LOGIC: DB Image එක ඇත්නම් එය පෙන්වයි, නැතිනම් Default Cache Image එක පෙන්වයි ---
+        let imageToDisplay;
+        if (settings.botImage && settings.botImage !== "null" && settings.botImage.startsWith("http")) {
+            imageToDisplay = { url: settings.botImage };
+        } else {
+            imageToDisplay = cachedStatusImage || { url: STATUS_IMAGE_URL };
+        }
 
         // අවසාන පණිවිඩය රූපය සමඟ යැවීම
         await zanta.sendMessage(from, {
