@@ -29,7 +29,7 @@ cmd({
 ⏱️ *Duration:* ${video.timestamp}
 🔗 *Link:* ${video.url}
 
-> *📥 Downloading your song via Manul API..*
+> *📥 Downloading your song..*
 `;
 
         await bot.sendMessage(from, { image: { url: video.thumbnail }, caption: msg }, { quoted: mek });
