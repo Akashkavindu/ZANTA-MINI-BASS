@@ -6,7 +6,7 @@ const allowedNumbers = ["94771810698", "94743404814", "94766247995", "1920630018
 
 cmd({
     pattern: "pay",
-    alias: ["setuser"],
+    alias: ["user"],
     react: "👤",
     desc: "Update user payment status (paid/unpaid).",
     category: "main",
